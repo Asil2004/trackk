@@ -1,0 +1,17 @@
+{
+  "rules": {
+    "current_pos": {
+      ".read": true,
+      ".write": true,
+      ".validate": "newData.hasChildren(['lat', 'lng'])"
+    },
+    "history": {
+      ".read": true,
+      ".write": true,
+      ".indexOn": ["ts", "lat", "lng"],
+      "$item": {
+        ".validate": "newData.hasChildren(['lat', 'lng'])"
+      }
+    }
+  }
+}

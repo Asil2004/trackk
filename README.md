@@ -1,282 +1,227 @@
-# 📡 RTK GPS Tracker — ESP32 + LG290P + Firebase
+# 📡 RTK GPS Tracker Pro — ESP32 + LG290P + Firebase
 
-Real vaqtda **santimetr aniqligida** GPS kuzatuv tizimi. ESP32 mikrokontrolleri LG290P GNSS modulidan joylashuv ma'lumotlarini oladi, NTRIP orqali RTK tuzatishlarni qo'llaydi va natijani Firebase Realtime Database'ga yuboradi.
+Real vaqt rejimida **santimetr aniqligida (1–2 sm)** ishlovchi GPS/GNSS kuzatuv va geodezik o'lchov tizimi. 
+ESP32 mikrokontrolleri Quectel LG290P ko'p chastotali GNSS modulidan ma'lumotlarni qabul qiladi, NTRIP orqali RTCM tuzatishlarni qo'llaydi va natijalarni Firebase Realtime Database'ga yuboradi. Veb-interfeys esa xaritada real vaqtda harakat, RTK holati va masofalarni ko'rsatadi.
 
 ---
 
 ## 📋 Mundarija
 
-- [Umumiy ko'rinish](#umumiy-korinish)
+- [Umumiy ko'rinish va RTK](#umumiy-korinish-va-rtk)
 - [Tizim arxitekturasi](#tizim-arxitekturasi)
 - [Kerakli komponentlar](#kerakli-komponentlar)
 - [Ulanish sxemasi](#ulanish-sxemasi)
-- [Dasturiy ta'minot sozlamalari](#dasturiy-taminot-sozlamalari)
-- [Firebase sozlash](#firebase-sozlash)
+- [Firebase sozlash va xavfsizlik qoidalari](#firebase-sozlash-va-xavfsizlik-qoidalari)
 - [NTRIP sozlash](#ntrip-sozlash)
-- [O'rnatish va ishga tushirish](#ornatish-va-ishga-tushirish)
-- [Ma'lumot formati](#malumot-formati)
+- [ESP32 dasturiy ta'minoti](#esp32-dasturiy-taminoti)
+- [Ma'lumotlar formati](#malumotlar-formati)
+- [Veb-interfeys imkoniyatlari](#veb-interfeys-imkoniyatlari)
 - [Muammolarni bartaraf etish](#muammolarni-bartaraf-etish)
 - [Litsenziya](#litsenziya)
 
 ---
 
-## Umumiy ko'rinish
+## Umumiy ko'rinish va RTK
 
-Oddiy GPS qurilmalar 2–5 metr aniqlik beradi. Bu loyiha esa **RTK (Real-Time Kinematic)** texnologiyasidan foydalanib, aniqlikni **1–3 santimetrga** yetkazadi. Bu quyidagi holatlar uchun foydali:
+Oddiy smartfon yoki avtomobil GPS qurilmalari 2–5 metr xatolik beradi. Ushbu loyiha **RTK (Real-Time Kinematic)** texnologiyasi orqali **1–2 santimetr** aniqlikni ta'minlaydi.
 
-- Yer uchastkalarini o'lchash (geodeziya)
-- Qishloq xo'jaligi texnikasini boshqarish
-- Dronlarni aniq boshqarish
-- Qurilish maydonlarida joylashuvni aniqlash
-- Transport vositalarini real vaqtda kuzatish
+### RTK Fix holatlari:
+| Holat kodi | Turi | Aniqlik darajasi | Tavsif |
+|:---:|:---|:---:|:---|
+| **4** | **RTK FIXED** | **1 – 2 sm** | Eng yuqori santimetr aniqligi. Fazaviy tuzatishlar to'liq ushlangan. |
+| **5** | **RTK FLOAT** | **10 – 30 sm** | Dekimetr aniqligi. Sun'iy yo'ldosh fazalari hisoblanmoqda. |
+| **2** | **DGPS** | **0.5 – 1 m** | Differensial GPS tuzatishlar bilan. |
+| **1** | **ODDIY GPS** | **2 – 5 m** | Avtonom GNSS holati (NTRIP tuzatishlarsiz). |
+| **0** | **NO FIX** | — | Sun'iy yo'ldosh qidirilmoqda yoki signal yo'q. |
 
 ---
 
 ## Tizim arxitekturasi
 
 ```
-┌──────────────────┐         RTCM tuzatish         ┌──────────────────┐
-│   NTRIP Server   │ ─────────────────────────────► │                  │
-│  (rtk2go.com)    │         WiFi orqali            │     ESP32        │
-│  SAMARKAND baza  │                                │  mikrokontroller │
-└──────────────────┘                                │                  │
-                                                    │   ┌──────────┐   │
-                                                    │   │ LG290P   │   │
-                                                    │   │ GNSS     │◄──┼── Sun'iy yo'ldosh signallari
-                                                    │   │ modul    │   │   (GPS, GLONASS, BeiDou, Galileo)
-                                                    │   └──────────┘   │
-                                                    └────────┬─────────┘
-                                                             │ WiFi
-                                                             ▼
-                                                    ┌──────────────────┐
-                                                    │ Firebase Realtime│
-                                                    │    Database      │
-                                                    ├──────────────────┤
-                                                    │ /current_pos     │ ← hozirgi nuqta
-                                                    │ /history         │ ← barcha nuqtalar
-                                                    └────────┬─────────┘
-                                                             │
-                                                             ▼
-                                                    ┌──────────────────┐
-                                                    │  Veb-sahifa /    │
-                                                    │  Mobil ilova     │
-                                                    └──────────────────┘
+┌────────────────────────┐         RTCM 3.x tuzatishlar         ┌────────────────────────┐
+│     NTRIP Server       │ ───────────────────────────────────► │                        │
+│   (rtk2go.com caster)  │             WiFi orqali              │      ESP32 DevKit      │
+│   SAMARKAND bazasi     │                                      │    (Dual Core 240MHz)  │
+└────────────────────────┘                                      │                        │
+                                                                │   ┌────────────────┐   │
+                                                                │   │ Quectel LG290P │   │
+                                                                │   │ GNSS Modul     │◄──┼── GNSS Signallari
+                                                                │   │ L1/L2/L5       │   │   (GPS, GLONASS,
+                                                                │   └────────────────┘   │    Galileo, BeiDou)
+                                                                └───────────┬────────────┘
+                                                                            │ WiFi (HTTPS/WSS)
+                                                                            ▼
+                                                                ┌────────────────────────┐
+                                                                │    Firebase Realtime   │
+                                                                │        Database        │
+                                                                ├────────────────────────┤
+                                                                │ /current_pos (Jonli)   │
+                                                                │ /history (Harakatlar)  │
+                                                                └───────────┬────────────┘
+                                                                            │ Real-time Stream
+                                                                            ▼
+                                                                ┌────────────────────────┐
+                                                                │    RTK Web Tracker     │
+                                                                │  (Leaflet + Live GUI)  │
+                                                                └────────────────────────┘
 ```
 
 ---
 
 ## Kerakli komponentlar
 
-### Apparat (Hardware)
-
-| Komponent | Tavsif |
-|-----------|--------|
-| **ESP32 DevKit** | WiFi va Bluetooth modulli mikrokontroller |
-| **Quectel LG290P** | Ko'p chastotali RTK GNSS moduli |
-| **GNSS antenna** | Tashqi faol antenna (L1/L2/L5 tavsiya etiladi) |
-| **USB kabel** | ESP32 ni kompyuterga ulash va quvvatlash uchun |
-| **Breadboard / simlar** | Ulanishlar uchun |
+### Uskunalar (Hardware)
+- **ESP32 DevKit v1** (30 yoki 38 pinli)
+- **Quectel LG290P** yuqori aniqlikdagi ko'p chastotali RTK moduli
+- **Ko'p chastotali GNSS antenna** (L1/L2/L5 qabul qiluvchi spiral yoki faol antenna)
+- **Micro-USB / Type-C kabel**
+- **Ulanish simlari (Jumper wires)**
 
 ### Dasturiy ta'minot (Software)
-
-| Dastur | Maqsad |
-|--------|--------|
-| **Arduino IDE** yoki **PlatformIO** | Kodni yozish va yuklash |
-| **TinyGPSPlus** kutubxonasi | NMEA jumlalarini tahlil qilish |
-| **FirebaseESP32** kutubxonasi | Firebase bilan aloqa |
-| **Firebase Console** | Ma'lumotlar bazasini boshqarish |
+- **Arduino IDE** (v2.x tavsiya etiladi)
+- `TinyGPSPlus` kutubxonasi
+- `FirebaseESP32` (yoki `Firebase-ESP-Client`) kutubxonasi
 
 ---
 
 ## Ulanish sxemasi
 
 ```
-ESP32                LG290P GNSS modul
-─────                ─────────────────
-GPIO 27 (RX2)  ◄───  TX
-GPIO 14 (TX2)  ───►  RX
-3.3V           ───►  VCC
-GND            ───►  GND
+ESP32                    Quectel LG290P
+─────────────────        ─────────────────
+GPIO 27 (RX2)     ◄────  TX
+GPIO 14 (TX2)     ────►  RX
+3.3V yoki 5V      ────►  VCC (Modul talabiga ko'ra)
+GND               ────►  GND
 ```
 
-> **Muhim:** LG290P moduli 460800 baud tezlikda ishlaydi. Ulanish simlarini imkon qadar qisqa tuting.
+> ⚠️ **Muhim:** LG290P moduli sukut bo'yicha **460800 baud** tezlikda ishlaydi. Simlar uzunligi 15-20 sm dan oshmasligi lozim.
 
 ---
 
-## Dasturiy ta'minot sozlamalari
+## Firebase sozlash va xavfsizlik qoidalari
 
-### 1. Arduino IDE kutubxonalarini o'rnatish
+### 1. Loyiha yaratish
+1. [Firebase Console](https://console.firebase.google.com/) sahifasiga kiring.
+2. Yangi loyiha yarating (masalan, `rtk-gps-tracker`).
+3. **Build → Realtime Database** bo'limiga kiring va baza hosil qiling.
+4. Baza joylashuvini tanlang (masalan, `europe-west1`).
 
-Arduino IDE da **Sketch → Include Library → Manage Libraries** bo'limiga o'ting va quyidagilarni o'rnating:
-
-- `TinyGPSPlus` — Mikal Hart tomonidan
-- `FirebaseESP32` — Mobizt tomonidan
-
-ESP32 board'ini ham qo'shing: **File → Preferences → Additional Board Manager URLs** ga quyidagini qo'shing:
-
-```
-https://dl.espressif.com/dl/package_esp32_index.json
-```
-
-### 2. Kodni sozlash
-
-`main.ino` faylida quyidagi qatorlarni o'z ma'lumotlaringiz bilan almashtiring:
-
-```cpp
-// WiFi
-const char* ssid = "WIFI_NOMI";
-const char* password = "WIFI_PAROLI";
-
-// Firebase
-#define FIREBASE_HOST "SIZNING_LOYIHA.firebasedatabase.app"
-#define FIREBASE_AUTH "SIZNING_DATABASE_SECRET"
-
-// NTRIP (agar boshqa baza stansiyasidan foydalansangiz)
-const char* mountpoint = "SAMARKAND";
-const char* user = "sizning@email.com";
-```
-
----
-
-## Firebase sozlash
-
-1. [Firebase Console](https://console.firebase.google.com/) ga kiring
-2. Yangi loyiha yarating
-3. **Realtime Database** bo'limiga o'ting va baza yarating
-4. Hududni tanlang (masalan, `europe-west1`)
-5. Xavfsizlik qoidalarini vaqtincha ochiq qiling (test uchun):
+### 2. Xavfsizlik qoidalarini kiritish
+Firebase Realtime Database → **Rules** bo'limiga kiring va quyidagi `database.rules.json` qoidasini saqlang:
 
 ```json
 {
   "rules": {
-    ".read": true,
-    ".write": true
+    "current_pos": {
+      ".read": true,
+      ".write": true,
+      ".validate": "newData.hasChildren(['lat', 'lng'])"
+    },
+    "history": {
+      ".read": true,
+      ".write": true,
+      ".indexOn": ["ts", "lat", "lng"],
+      "$item": {
+        ".validate": "newData.hasChildren(['lat', 'lng'])"
+      }
+    }
   }
 }
 ```
 
-6. **Project Settings → Service Accounts → Database Secrets** dan kalitni nusxalang va `FIREBASE_AUTH` ga joylashtiring
-
-> **Ogohlantirish:** Ishlab chiqarish muhitida xavfsizlik qoidalarini cheklang. Yuqoridagi qoidalar faqat test uchun.
+Ushbu qoida faqat to'g'ri koordinata (`lat` va `lng`) kelgandagina yozishga ruxsat beradi va tizimni ortiqcha xato ma'lumotlardan himoyalaydi.
 
 ---
 
 ## NTRIP sozlash
 
-Bu loyiha bepul **rtk2go.com** NTRIP caster xizmatidan foydalanadi.
-
-### Mavjud baza stansiyalarini tekshirish
-
-1. Brauzerda `http://rtk2go.com:2101` manzilini oching
-2. Sizga yaqin bo'lgan mountpoint nomini toping
-3. Koddagi `mountpoint` qiymatini shu nomga o'zgartiring
-
-### Hisob yaratish
-
-- `rtk2go.com` saytiga tashrif buyuring
-- Email manzilingiz bilan ro'yxatdan o'ting
-- Koddagi `user` maydoniga email manzilingizni yozing
-
-> **Eslatma:** O'zbekistonda SAMARKAND mountpoint'i mavjud. Boshqa hududlar uchun [rtk2go.com](http://www.rtk2go.com/) dan tekshiring.
-
----
-
-## O'rnatish va ishga tushirish
-
-1. **Repozitoriyani klonlash:**
-   ```bash
-   git clone https://github.com/SIZNING_USERNAME/rtk-gps-tracker.git
-   cd rtk-gps-tracker
-   ```
-
-2. **Arduino IDE da faylni oching** va yuqoridagi sozlamalarni kiriting
-
-3. **Board sozlamalari:**
-   - Board: `ESP32 Dev Module`
-   - Upload Speed: `921600`
-   - Flash Frequency: `80MHz`
-   - Port: ESP32 ulangan COM portni tanlang
-
-4. **Kodni yuklang** (Upload tugmasi)
-
-5. **Serial Monitor'ni oching** (baud rate: `115200`) va natijalarni kuzating:
-   ```
-   WiFi ulandi!
-   Current position yangilandi
-   Tarixga yangi nuqta qo'shildi
+1. [rtk2go.com](http://www.rtk2go.com/) saytidan ro'yxatdan o'ting.
+2. Ro'yxatdan o'tgan emailingizni `track.ino` dagi `user` maydoniga yozing:
+   ```cpp
+   const char* host       = "rtk2go.com";
+   const int   port       = 2101;
+   const char* mountpoint = "SAMARKAND"; // O'zingizga yaqin baza
+   const char* user       = "sizning_emailingiz@gmail.com";
+   const char* pw         = "none";
    ```
 
 ---
 
-## Ma'lumot formati
+## ESP32 dasturiy ta'minoti
 
-Firebase'ga quyidagi formatda ma'lumot yoziladi:
+`track.ino` kodi quyidagi muhim yangilanishlarga ega:
+- **Non-blocking NTRIP:** Aloqa uzilsa, ESP32 tiqilib (hang) qolmaydi, GPS ma'lumotlari uzluksiz o'qiladi.
+- **Haqiqiy RTK Sifat Detektori:** `GNGGA` NMEA jumlasidan to'g'ridan-to'g'ri RTK Fixed (4), RTK Float (5), DGPS (2), GPS (1) holatlari ajratib olinadi.
+- **Harakatlanish filtri (Deadband):** Qurilma harakatsiz turganida `/history` tuguniga minglab bir xil nuqtalar yozilmaydi. Faqat belgilangan minimal masofa (1 metr) siljigandagina tarix saqlanadi.
+- **Server Timestamp:** Har bir yozuvga Firebase serverining aniq vaqt tamg'asi (`{".sv": "timestamp"}`) qo'shiladi.
 
-### `/current_pos` — hozirgi joylashuv (har safar ustiga yoziladi)
+---
 
+## Ma'lumotlar formati
+
+### `/current_pos` — Joriy joylashuv (Jonli)
 ```json
 {
   "lat": "39.65432100",
   "lng": "66.95987600",
-  "fix": 24
+  "sat": 26,
+  "fix": 4,
+  "fix_str": "RTK Fixed (1-2 sm)",
+  "hdop": 0.58,
+  "alt": 718.4,
+  "speed": 12.4,
+  "ts": 1731868000000
 }
 ```
 
-### `/history` — joylashuv tarixi (har 3 sekundda yangi yozuv qo'shiladi)
-
+### `/history` — Harakatlar tarixi
 ```json
 {
-  "-NxAbCd123": {
+  "-OH1aBcDeFgHiJkLmNoP": {
     "lat": "39.65432100",
     "lng": "66.95987600",
-    "fix": 24
-  },
-  "-NxAbCd456": {
-    "lat": "39.65432200",
-    "lng": "66.95987700",
-    "fix": 26
+    "sat": 26,
+    "fix": 4,
+    "fix_str": "RTK Fixed (1-2 sm)",
+    "hdop": 0.58,
+    "alt": 718.4,
+    "ts": 1731868000000
   }
 }
 ```
 
-| Maydon | Tavsif |
-|--------|--------|
-| `lat` | Kenglik (latitude), 8 ta kasr belgisi bilan |
-| `lng` | Uzunlik (longitude), 8 ta kasr belgisi bilan |
-| `fix` | Ushlanayotgan sun'iy yo'ldoshlar soni (ko'p bo'lsa — aniqlik yuqori) |
+---
+
+## Veb-interfeys imkoniyatlari (`index.html`)
+
+1. **Jonli monitoring:** Google Satellite gibrid xaritasida qurilmaning aniq harakati va holati.
+2. **RTK Status Indikatori:** Ekranda RTK FIXED (yashil), RTK FLOAT (sariq) va GPS holatlarining vizual ko'rsatkichlari.
+3. **Geodezik o'lchov (Measure Tool):**
+   - Istalgancha nuqtalar qo'yib, har bir oraliq masofani hisoblash.
+   - Maydon yuzasini kvadrat metr ($m^2$) va gektarda ($ga$) hisoblash.
+   - O'lchov natijalarini alohida CSV shaklida yuklab olish.
+4. **Eksport imkoniyatlari:**
+   - **GeoJSON:** GIS, QGIS va ArcGIS dasturlari uchun.
+   - **CSV:** Excel va jadval tahlillari uchun.
+   - **GPX:** GPS navigatorlar uchun.
+   - **Skrinshot (PNG):** Xarita va barcha statistikalarni bir tugma bilan rasm qilib saqlash.
+5. **Sozlamalar (⚙):** Brauzer orqali Firebase Database URL manzilini o'zgartirish va saqlash imkoniyati.
 
 ---
 
 ## Muammolarni bartaraf etish
 
-| Muammo | Yechim |
-|--------|--------|
-| WiFi ga ulanmayapti | SSID va parolni tekshiring. ESP32 faqat 2.4 GHz WiFi ni qo'llaydi |
-| GPS signal yo'q | Antennani ochiq joyga qo'ying. Birinchi fix olish 1–5 daqiqa vaqt olishi mumkin |
-| Firebase ga ma'lumot kelmayapti | `FIREBASE_HOST` va `FIREBASE_AUTH` qiymatlarini tekshiring. Database qoidalari ochiq ekanligiga ishonch hosil qiling |
-| NTRIP ulanmayapti | Internet aloqasini tekshiring. `rtk2go.com` serveriga ping yuboring. Mountpoint nomini tekshiring |
-| Serial Monitor bo'sh | Baud rate `115200` ekanligini tekshiring |
-| `fix` qiymati 0 | Antenna ochiq osmonda bo'lishi kerak. NTRIP ulanishi ishlayotganligini tekshiring |
-| RTK Fix olinmayapti | Baza stansiyasi 30 km dan uzoq bo'lmasligi kerak. Antenna sifatini tekshiring |
-
----
-
-## Kelajakdagi rejalar
-
-- [ ] Veb-sahifada xarita ustida real vaqtda kuzatish
-- [ ] Batareya quvvatini monitoring qilish
-- [ ] Geofence (hudud chegarasi) ogohlantirish tizimi
-- [ ] Ma'lumotlarni SD kartaga zaxiralash (offline rejim)
-- [ ] OTA (Over-The-Air) dasturiy ta'minot yangilash
+| Muammo | Sababi | Yechim |
+|---|---|---|
+| **Firebase da Permission Denied** | Database Rules yopiq yoki muddati o'tgan | `database.rules.json` dagi qoidalarni Realtime Database → Rules bo'limiga yuklang. |
+| **Baza tez to'lib ketyapti** | Har soniyada takroriy nuqtalar yozilgan | Yangi koddagi masofa filtri (`MIN_DISTANCE_MOVE_M = 1.0`) va veb-interfeysdagi buffer to'g'rilandi. |
+| **RTK Fix (4) olinmayapti** | NTRIP server bilan aloqa yo'q yoki baza uzoqda | `rtk2go.com` da `SAMARKAND` mountpoint faolligini tekshiring. Antenna ochiq osmon ostida bo'lishi kerak. |
+| **Serial Monitor'da noaniq belgilar** | Noto'g'ri baud rate | Serial monitor tezligini `115200` ga, LG290P tezligini esa `460800` ga sozlang. |
+| **Kutubxona xatosi (compile error)** | `FirebaseESP32` versiya mos kelmasligi | Arduino IDE da `Firebase ESP32 Client by Mobizt` kutubxonasini yangilang. |
 
 ---
 
 ## Litsenziya
-
-Bu loyiha ochiq kodli bo'lib, shaxsiy va ta'lim maqsadlarida foydalanish uchun mo'ljallangan.
-
----
-
-> **Muallif:** rasil8004@gmail.com  
-> **Baza stansiyasi:** SAMARKAND, O'zbekiston  
-> **Texnologiyalar:** ESP32, LG290P, NTRIP, Firebase Realtime Database
+Ushbu loyiha ochiq kodli bo'lib, MIT litsenziyasi asosida tarqatiladi.

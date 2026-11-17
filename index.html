@@ -3,41 +3,52 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>RTK Tracker Pro</title>
+    <title>RTK Tracker Pro — Santimetr Aniqligida GPS</title>
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/854/854878.png">
+    
+    <!-- Leaflet CSS & JS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+    
+    <!-- Firebase JS SDK (v8 Compat) -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    
+    <!-- Screenshot Tool -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    
+    <!-- Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
     <style>
         :root {
             --bg: #0a0e17;
-            --card: rgba(14, 20, 33, 0.92);
-            --border: rgba(56, 189, 248, 0.15);
+            --card: rgba(14, 20, 33, 0.94);
+            --border: rgba(56, 189, 248, 0.18);
             --accent: #38bdf8;
             --accent2: #818cf8;
             --success: #34d399;
             --danger: #f87171;
             --warning: #fbbf24;
+            --rtk-fixed: #10b981;
+            --rtk-float: #f59e0b;
             --text: #e2e8f0;
-            --text-dim: #64748b;
+            --text-dim: #94a3b8;
             --glow: 0 0 20px rgba(56, 189, 248, 0.15);
             --measure: #f472b6;
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body, html { height: 100%; font-family: 'Outfit', sans-serif; overflow: hidden; background: var(--bg); }
+        body, html { height: 100%; font-family: 'Outfit', sans-serif; overflow: hidden; background: var(--bg); color: var(--text); }
         #map { height: 100vh; width: 100%; position: absolute; z-index: 1; }
 
         .dashboard {
             position: absolute; top: 12px; left: 12px; z-index: 1000;
-            width: 280px; background: var(--card);
+            width: 300px; background: var(--card);
             backdrop-filter: blur(20px); border-radius: 16px;
-            box-shadow: var(--glow), 0 8px 32px rgba(0,0,0,0.5);
+            box-shadow: var(--glow), 0 8px 32px rgba(0,0,0,0.6);
             padding: 16px; border: 1px solid var(--border);
             max-height: calc(100vh - 24px); overflow-y: auto;
             scrollbar-width: none;
@@ -45,30 +56,39 @@
         .dashboard::-webkit-scrollbar { display: none; }
 
         .logo {
-            display: flex; align-items: center; gap: 8px;
+            display: flex; align-items: center; justify-content: space-between;
             margin-bottom: 12px; padding-bottom: 10px;
             border-bottom: 1px solid var(--border);
         }
+        .logo-left { display: flex; align-items: center; gap: 8px; }
         .logo-icon {
-            width: 32px; height: 32px; border-radius: 8px;
+            width: 34px; height: 34px; border-radius: 9px;
             background: linear-gradient(135deg, var(--accent), var(--accent2));
             display: flex; align-items: center; justify-content: center;
-            font-size: 16px; flex-shrink: 0;
+            font-size: 18px; flex-shrink: 0; box-shadow: 0 0 10px rgba(56,189,248,0.4);
         }
         .logo h2 { font-size: 15px; color: var(--text); font-weight: 700; letter-spacing: -0.3px; }
         .logo small { font-size: 10px; color: var(--text-dim); font-weight: 400; }
+        .btn-settings-icon {
+            background: rgba(255,255,255,0.06); border: 1px solid var(--border);
+            border-radius: 8px; width: 30px; height: 30px; display: flex;
+            align-items: center; justify-content: center; cursor: pointer;
+            font-size: 14px; color: var(--text-dim); transition: all 0.2s;
+        }
+        .btn-settings-icon:hover { color: var(--text); background: rgba(255,255,255,0.12); }
 
         .conn-bar {
-            display: flex; align-items: center; gap: 6px;
+            display: flex; align-items: center; justify-content: space-between;
             padding: 8px 10px; border-radius: 8px;
-            background: rgba(255,255,255,0.03); margin-bottom: 10px;
-            border: 1px solid var(--border); font-size: 12px; color: var(--text-dim);
+            background: rgba(255,255,255,0.03); margin-bottom: 8px;
+            border: 1px solid var(--border); font-size: 11px; color: var(--text-dim);
         }
+        .conn-status-wrap { display: flex; align-items: center; gap: 6px; }
         .conn-dot {
             width: 8px; height: 8px; border-radius: 50%;
             background: var(--danger); flex-shrink: 0; transition: background 0.3s;
         }
-        .conn-dot.online { background: var(--success); box-shadow: 0 0 8px rgba(52,211,153,0.5); }
+        .conn-dot.online { background: var(--success); box-shadow: 0 0 8px rgba(52,211,153,0.6); }
         .conn-dot.syncing { background: var(--warning); animation: pulse 1s infinite; }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 
@@ -79,9 +99,25 @@
             background: rgba(255,255,255,0.04); border: 1px solid var(--border);
             transition: all 0.3s;
         }
-        .status-badge.recording { background: rgba(52,211,153,0.1); border-color: rgba(52,211,153,0.3); color: var(--success); }
-        .status-badge.stopped { background: rgba(248,113,113,0.1); border-color: rgba(248,113,113,0.3); color: var(--danger); }
-        .status-badge.measuring { background: rgba(244,114,182,0.1); border-color: rgba(244,114,182,0.3); color: var(--measure); }
+        .status-badge.recording { background: rgba(52,211,153,0.12); border-color: rgba(52,211,153,0.4); color: var(--success); }
+        .status-badge.stopped { background: rgba(248,113,113,0.12); border-color: rgba(248,113,113,0.4); color: var(--danger); }
+        .status-badge.measuring { background: rgba(244,114,182,0.12); border-color: rgba(244,114,182,0.4); color: var(--measure); }
+
+        .rtk-indicator {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 7px 10px; border-radius: 8px; margin-bottom: 10px;
+            font-size: 11px; font-weight: 600;
+            background: rgba(255,255,255,0.03); border: 1px solid var(--border);
+        }
+        .rtk-tag {
+            padding: 2px 7px; border-radius: 5px; font-size: 10px; font-weight: 700;
+            text-transform: uppercase; letter-spacing: 0.5px;
+        }
+        .rtk-fixed { background: rgba(16,185,129,0.2); color: #34d399; border: 1px solid rgba(16,185,129,0.4); }
+        .rtk-float { background: rgba(245,158,11,0.2); color: #fbbf24; border: 1px solid rgba(245,158,11,0.4); }
+        .rtk-dgps  { background: rgba(59,130,246,0.2); color: #60a5fa; border: 1px solid rgba(59,130,246,0.4); }
+        .rtk-gps   { background: rgba(148,163,184,0.2); color: #cbd5e1; border: 1px solid rgba(148,163,184,0.4); }
+        .rtk-none  { background: rgba(239,68,68,0.2); color: #f87171; border: 1px solid rgba(239,68,68,0.4); }
 
         .btn-group { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; }
         .btn-row { display: flex; gap: 5px; }
@@ -108,14 +144,14 @@
 
         .stats { font-size: 11px; color: var(--text-dim); border-top: 1px solid var(--border); padding-top: 10px; }
         .stats-section-title { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--accent); margin-bottom: 6px; font-weight: 600; }
-        .stats-item { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; padding: 3px 0; }
+        .stats-item { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; padding: 2px 0; }
         .stats-item b { color: var(--text); font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 600; }
         .stats-divider { height: 1px; background: var(--border); margin: 8px 0; }
 
         .measure-panel { display: none; margin-top: 8px; padding: 10px; border-radius: 10px; border: 1px solid rgba(244,114,182,0.3); background: rgba(244,114,182,0.05); }
         .measure-panel.active { display: block; }
         .measure-panel .stats-section-title { color: var(--measure); }
-        .measure-list { max-height: 120px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--measure) transparent; }
+        .measure-list { max-height: 110px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--measure) transparent; }
         .measure-list::-webkit-scrollbar { width: 4px; }
         .measure-list::-webkit-scrollbar-thumb { background: var(--measure); border-radius: 2px; }
         .segment-item {
@@ -144,22 +180,32 @@
         .counter-row { display: flex; align-items: center; gap: 6px; font-size: 11px; }
         .counter-label { color: var(--text-dim); }
         .counter-value { color: var(--text); font-family: 'JetBrains Mono', monospace; font-weight: 600; font-size: 12px; }
-        .speed-value { color: var(--warning); font-size: 18px; font-weight: 700; }
+        .speed-value { color: var(--warning); font-size: 20px; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
         .speed-unit { color: var(--text-dim); font-size: 10px; }
 
+        /* Modals */
         .modal-overlay {
             display: none; position: fixed; inset: 0; z-index: 2000;
-            background: rgba(0,0,0,0.7); backdrop-filter: blur(4px);
+            background: rgba(0,0,0,0.75); backdrop-filter: blur(5px);
             align-items: center; justify-content: center;
         }
         .modal-overlay.active { display: flex; }
         .modal {
             background: var(--card); border: 1px solid var(--border);
-            border-radius: 16px; padding: 20px; width: 280px; box-shadow: var(--glow);
+            border-radius: 16px; padding: 20px; width: 320px; box-shadow: var(--glow);
         }
-        .modal h3 { color: var(--text); font-size: 14px; margin-bottom: 12px; }
+        .modal h3 { color: var(--text); font-size: 15px; margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
         .modal button { width: 100%; margin-bottom: 6px; }
         .modal .btn-cancel { background: rgba(255,255,255,0.06); border: 1px solid var(--border); color: var(--text-dim); }
+        
+        .form-group { margin-bottom: 12px; }
+        .form-group label { display: block; font-size: 11px; color: var(--text-dim); margin-bottom: 4px; }
+        .form-input {
+            width: 100%; background: rgba(0,0,0,0.4); border: 1px solid var(--border);
+            padding: 8px 10px; border-radius: 8px; color: var(--text);
+            font-family: 'JetBrains Mono', monospace; font-size: 11px;
+        }
+        .form-input:focus { outline: none; border-color: var(--accent); }
 
         .toast {
             position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
@@ -182,10 +228,11 @@
             font-size: 11px !important; padding: 4px 8px !important; border-radius: 6px !important;
             box-shadow: 0 0 10px rgba(244,114,182,0.3) !important; white-space: nowrap !important;
         }
-        .measure-tooltip::before, .leaflet-tooltip-left.measure-tooltip::before, .leaflet-tooltip-right.measure-tooltip::before { display: none !important; }
+        .measure-tooltip::before { display: none !important; }
 
-        @media (max-width: 400px) {
+        @media (max-width: 480px) {
             .dashboard { width: calc(100% - 24px); }
+            .data-counter { display: none; }
         }
     </style>
 </head>
@@ -193,26 +240,40 @@
 
 <div class="dashboard" id="dashboard">
     <div class="logo">
-        <div class="logo-icon">🛰</div>
-        <div>
-            <h2>RTK Tracker</h2>
-            <small>Real-time kinematic GPS</small>
+        <div class="logo-left">
+            <div class="logo-icon">🛰</div>
+            <div>
+                <h2>RTK Tracker Pro</h2>
+                <small>Santimetr aniqlikdagi GPS</small>
+            </div>
         </div>
+        <button class="btn-settings-icon" id="btnOpenSettings" title="Sozlamalar">⚙</button>
     </div>
+
     <div class="conn-bar">
-        <div class="conn-dot" id="connDot"></div>
-        <span id="connText">Ulanmoqda...</span>
+        <div class="conn-status-wrap">
+            <div class="conn-dot" id="connDot"></div>
+            <span id="connText">Firebase kutilmoqda...</span>
+        </div>
+        <span id="livePulse" style="font-family:'JetBrains Mono'; font-size:10px; opacity:0.7;"></span>
     </div>
+
+    <div class="rtk-indicator">
+        <span>RTK Holati:</span>
+        <span class="rtk-tag rtk-none" id="rtkBadge">QIDIRILMOQDA</span>
+    </div>
+
     <div class="status-badge" id="statusBox">
         <span id="stateText">Tizim tayyor</span>
     </div>
+
     <div class="btn-group">
         <div class="btn-row">
-            <button class="btn-start" id="btnStart">▶ Boshlash</button>
+            <button class="btn-start" id="btnStart">▶ Trek Boshlash</button>
             <button class="btn-stop" id="btnStop" disabled>⏹ To'xtatish</button>
         </div>
         <div class="btn-row">
-            <button class="btn-focus" id="btnFindMe">📍 Fokus</button>
+            <button class="btn-focus" id="btnFindMe">📍 Hozirgi nuqta</button>
             <button class="btn-history" id="btnHistory">📜 Tarix</button>
         </div>
         <div class="btn-row">
@@ -224,29 +285,34 @@
             <button class="btn-clear" id="btnClear">♻ Tozalash</button>
         </div>
     </div>
+
     <div class="stats">
-        <div class="stats-section-title">GPS Ma'lumotlari</div>
-        <div class="stats-item"><span>Yo'ldoshlar (Fix):</span> <b id="satVal">—</b></div>
-        <div class="stats-item"><span>Latitude:</span> <b id="latVal">—</b></div>
-        <div class="stats-item"><span>Longitude:</span> <b id="lngVal">—</b></div>
-        <div class="stats-item"><span>Aniqlik (m):</span> <b id="accVal">—</b></div>
-        <div class="stats-item"><span>Oxirgi yangilanish:</span> <b id="lastUpdate">—</b></div>
+        <div class="stats-section-title">GNSS / GPS Ko'rsatkichlari</div>
+        <div class="stats-item"><span>Latitude (Kenglik):</span> <b id="latVal">—</b></div>
+        <div class="stats-item"><span>Longitude (Uzunlik):</span> <b id="lngVal">—</b></div>
+        <div class="stats-item"><span>Sun'iy yo'ldoshlar:</span> <b id="satVal">—</b></div>
+        <div class="stats-item"><span>HDOP (Gorizontal xato):</span> <b id="hdopVal">—</b></div>
+        <div class="stats-item"><span>Balandlik (Altitude):</span> <b id="altVal">—</b></div>
+        <div class="stats-item"><span>Oxirgi aloqa:</span> <b id="lastUpdate">—</b></div>
+
         <div class="stats-divider"></div>
-        <div class="stats-section-title">Trek statistikasi</div>
+
+        <div class="stats-section-title">Trek Statistikasi</div>
         <div class="stats-item"><span>Nuqtalar soni:</span> <b id="pointCount">0</b></div>
-        <div class="stats-item"><span>Masofa:</span> <b id="totalDist">0 m</b></div>
-        <div class="stats-item"><span>Davomiylik:</span> <b id="duration">00:00:00</b></div>
-        <div class="stats-item"><span>Tezlik:</span> <b id="speedVal">0 km/h</b></div>
+        <div class="stats-item"><span>Bosib o'tilgan masofa:</span> <b id="totalDist">0 m</b></div>
+        <div class="stats-item"><span>Harakat vaqti:</span> <b id="duration">00:00:00</b></div>
+        <div class="stats-item"><span>Joriy tezlik:</span> <b id="speedVal">0.0 km/h</b></div>
     </div>
+
     <div class="measure-panel" id="measurePanel">
-        <div class="stats-section-title">📏 O'lchash natijalari</div>
+        <div class="stats-section-title">📏 Masofa va Yuza O'lchovi</div>
         <div class="measure-list" id="measureList"></div>
         <div class="measure-total">
-            <span>Umumiy masofa:</span>
+            <span>Jami masofa:</span>
             <b id="measureTotal">0 m</b>
         </div>
         <div class="measure-area">
-            <span>Yuzasi (taxminiy):</span>
+            <span>Maydon yuzasi:</span>
             <b id="measureArea">—</b>
         </div>
         <div class="measure-actions">
@@ -269,14 +335,28 @@
 
 <div id="map"></div>
 
+<!-- Export Modal -->
 <div class="modal-overlay" id="exportModal">
     <div class="modal">
-        <h3>📤 Ma'lumotni eksport qilish</h3>
-        <button class="btn-export" id="exportGeoJSON">GeoJSON formatda</button>
-        <button class="btn-history" id="exportCSV">CSV formatda</button>
-        <button class="btn-focus" id="exportGPX">GPX formatda</button>
-        <button class="btn-measure" id="exportMeasure">📏 O'lchov natijalarini CSV</button>
-        <button class="btn-cancel" id="exportCancel">Bekor qilish</button>
+        <h3>📤 Ma'lumotlarni eksport qilish</h3>
+        <button class="btn-export" id="exportGeoJSON">GeoJSON formatida</button>
+        <button class="btn-history" id="exportCSV">CSV formatida (Excel)</button>
+        <button class="btn-focus" id="exportGPX">GPX formatida (Navigatsiya)</button>
+        <button class="btn-measure" id="exportMeasure">📏 O'lchov natijalari CSV</button>
+        <button class="btn-cancel" id="exportCancel">Yopish</button>
+    </div>
+</div>
+
+<!-- Settings Modal -->
+<div class="modal-overlay" id="settingsModal">
+    <div class="modal">
+        <h3>⚙ Firebase Sozlamalari</h3>
+        <div class="form-group">
+            <label for="cfgDatabaseUrl">Firebase Realtime Database URL:</label>
+            <input type="text" id="cfgDatabaseUrl" class="form-input" placeholder="https://your-project.firebaseio.com">
+        </div>
+        <button class="btn-history" id="btnSaveSettings">Saqlash va Ulanish</button>
+        <button class="btn-cancel" id="btnCloseSettings">Bekor qilish</button>
     </div>
 </div>
 
@@ -286,141 +366,288 @@
 (function() {
     'use strict';
 
-    const FIREBASE_URL = "https://gps-trackker-default-rtdb.europe-west1.firebasedatabase.app/";
+    const STORAGE_KEY_DB_URL = "rtk_firebase_database_url";
+    const DEFAULT_DB_URL = "https://gps-trackker-default-rtdb.europe-west1.firebasedatabase.app/";
     const DEFAULT_CENTER = [39.65, 66.95];
     const DEFAULT_ZOOM = 16;
     const HISTORY_LIMIT = 500;
-    const MIN_DISTANCE_THRESHOLD = 0.3;
-    const DATA_SYNC_INTERVAL = 2000;
+    const MIN_DISTANCE_THRESHOLD = 0.5; // metr
 
     let isTracking = false, lastPos = null, prevPos = null, prevTime = null;
     let trackPoints = [], trackStartTime = null, totalDistance = 0, currentSpeed = 0;
-    let isConnected = false, dataBuffer = [], durationTimer = null, lastDataTime = 0;
+    let isConnected = false, durationTimer = null, lastDataTime = 0;
 
     let isMeasuring = false, measurePoints = [], measureMarkers = [], measureLines = [], measureTooltips = [];
     let measureTotalDist = 0;
+    let currentDbUrl = localStorage.getItem(STORAGE_KEY_DB_URL) || DEFAULT_DB_URL;
 
-    // Firebase
-    firebase.initializeApp({ databaseURL: FIREBASE_URL });
-    const db = firebase.database();
+    // =================== FIREBASE INIT ===================
+    let app = null;
+    let db = null;
+    let currentPosRef = null;
+    let connRef = null;
 
-    db.ref('.info/connected').on('value', snap => {
-        isConnected = snap.val() === true;
-        updateConnectionUI();
-        if (isConnected) flushBuffer();
-    });
+    function initFirebase(dbUrl) {
+        try {
+            if (currentPosRef) currentPosRef.off();
+            if (connRef) connRef.off();
+            if (firebase.apps.length) {
+                firebase.app().delete();
+            }
 
-    function updateConnectionUI() {
-        const dot = document.getElementById('connDot'), text = document.getElementById('connText');
-        if (isConnected) { dot.className = 'conn-dot online'; text.textContent = 'Firebase ulangan'; }
-        else { dot.className = 'conn-dot'; text.textContent = "Ulanish yo'q..."; }
+            app = firebase.initializeApp({ databaseURL: dbUrl });
+            db = firebase.database();
+
+            connRef = db.ref('.info/connected');
+            connRef.on('value', snap => {
+                isConnected = snap.val() === true;
+                updateConnectionUI();
+            });
+
+            // /current_pos ni kuzatish
+            currentPosRef = db.ref("/current_pos");
+            currentPosRef.on("value", snap => {
+                const data = snap.val();
+                if (!data) return;
+                handleCurrentPosData(data);
+            }, err => {
+                updateConnectionUI();
+                showToast("⚠ Firebase o'qishda xatolik: " + err.message);
+            });
+
+            showToast("🔗 Firebase ga ulanmoqda...");
+        } catch (e) {
+            console.error("Firebase init error:", e);
+            showToast("⚠ Firebase sozlamasida xatolik: " + e.message);
+        }
     }
 
-    // Map
+    function updateConnectionUI() {
+        const dot = document.getElementById('connDot');
+        const text = document.getElementById('connText');
+        if (isConnected) {
+            dot.className = 'conn-dot online';
+            text.textContent = 'Firebase ulangan';
+        } else {
+            dot.className = 'conn-dot';
+            text.textContent = "Ulanish yo'q...";
+        }
+    }
+
+    // =================== XARITA (LEAFLET) ===================
     const map = L.map('map', { zoomControl: false, attributionControl: false }).setView(DEFAULT_CENTER, DEFAULT_ZOOM);
-    L.tileLayer('https://{s}.google.com/vt/lyrs=s,h&x={x}&y={y}&z={z}', { maxZoom: 22, subdomains: ['mt0','mt1','mt2','mt3'] }).addTo(map);
+    L.tileLayer('https://{s}.google.com/vt/lyrs=s,h&x={x}&y={y}&z={z}', {
+        maxZoom: 22,
+        subdomains: ['mt0','mt1','mt2','mt3']
+    }).addTo(map);
 
     const markerIcon = L.divIcon({
         className: '',
-        html: `<div style="width:18px;height:18px;border-radius:50%;background:#38bdf8;border:3px solid white;box-shadow:0 0 12px rgba(56,189,248,0.6);position:relative;"><div style="position:absolute;inset:-8px;border-radius:50%;border:2px solid rgba(56,189,248,0.4);animation:ping 1.5s cubic-bezier(0,0,0.2,1) infinite;"></div></div><style>@keyframes ping{75%,100%{transform:scale(2);opacity:0}}</style>`,
-        iconSize: [18,18], iconAnchor: [9,9]
+        html: `<div style="width:20px;height:20px;border-radius:50%;background:#38bdf8;border:3px solid white;box-shadow:0 0 14px rgba(56,189,248,0.8);position:relative;">
+                 <div style="position:absolute;inset:-8px;border-radius:50%;border:2px solid rgba(56,189,248,0.5);animation:ping 1.5s cubic-bezier(0,0,0.2,1) infinite;"></div>
+               </div>
+               <style>@keyframes ping{75%,100%{transform:scale(2.2);opacity:0}}</style>`,
+        iconSize: [20,20],
+        iconAnchor: [10,10]
     });
-    let marker = L.marker([0,0], { icon: markerIcon }).addTo(map);
-    let polyline = L.polyline([], { color:'#34d399', weight:4, opacity:0.9, lineJoin:'round', lineCap:'round' }).addTo(map);
-    let historyLine = L.polyline([], { color:'#fbbf24', weight:3, opacity:0.6, dashArray:'8, 12' }).addTo(map);
 
-    // Utils
+    let marker = L.marker([0,0], { icon: markerIcon }).addTo(map);
+    let polyline = L.polyline([], { color:'#34d399', weight:4, opacity:0.95, lineJoin:'round', lineCap:'round' }).addTo(map);
+    let historyLine = L.polyline([], { color:'#fbbf24', weight:3, opacity:0.7, dashArray:'8, 12' }).addTo(map);
+
+    // =================== MATEMATIK FORMULALAR ===================
     function haversine(lat1, lon1, lat2, lon2) {
-        const R = 6371000, dLat = (lat2-lat1)*Math.PI/180, dLon = (lon2-lon1)*Math.PI/180;
-        const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
-        return R*2*Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        const R = 6371000;
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = Math.sin(dLat / 2) ** 2 +
+                  Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                  Math.sin(dLon / 2) ** 2;
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     }
-    function formatDist(m) { if(m>=1000) return (m/1000).toFixed(3)+' km'; if(m>=1) return m.toFixed(2)+' m'; return (m*100).toFixed(1)+' sm'; }
-    function formatDuration(ms) { const s=Math.floor(ms/1000); return [Math.floor(s/3600),Math.floor((s%3600)/60),s%60].map(v=>String(v).padStart(2,'0')).join(':'); }
-    function showToast(msg, dur=2500) { const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), dur); }
-    function dateStamp() { return new Date().toISOString().slice(0,19).replace(/[T:]/g,'-'); }
-    function downloadFile(content, filename, type) { const b=new Blob([content],{type}), a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download=filename; a.click(); URL.revokeObjectURL(a.href); }
+
+    function formatDist(m) {
+        if (m >= 1000) return (m / 1000).toFixed(3) + ' km';
+        if (m >= 1) return m.toFixed(2) + ' m';
+        return (m * 100).toFixed(1) + ' sm';
+    }
+
+    function formatDuration(ms) {
+        const s = Math.floor(ms / 1000);
+        return [Math.floor(s / 3600), Math.floor((s % 3600) / 60), s % 60]
+            .map(v => String(v).padStart(2, '0')).join(':');
+    }
+
+    function showToast(msg, dur = 2800) {
+        const t = document.getElementById('toast');
+        t.textContent = msg;
+        t.classList.add('show');
+        setTimeout(() => t.classList.remove('show'), dur);
+    }
+
+    function dateStamp() {
+        return new Date().toISOString().slice(0,19).replace(/[T:]/g,'-');
+    }
+
+    function downloadFile(content, filename, type) {
+        const b = new Blob([content], { type });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(b);
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(a.href);
+    }
 
     function calcArea(pts) {
         if (pts.length < 3) return 0;
-        let area = 0; const R = 6371000, toRad = d => d*Math.PI/180;
+        let area = 0; const R = 6371000, toRad = d => d * Math.PI / 180;
         for (let i = 0; i < pts.length; i++) {
-            const j = (i+1)%pts.length;
-            const xi = toRad(pts[i].lng)*R*Math.cos(toRad(pts[i].lat)), yi = toRad(pts[i].lat)*R;
-            const xj = toRad(pts[j].lng)*R*Math.cos(toRad(pts[j].lat)), yj = toRad(pts[j].lat)*R;
-            area += xi*yj - xj*yi;
+            const j = (i + 1) % pts.length;
+            const xi = toRad(pts[i].lng) * R * Math.cos(toRad(pts[i].lat)), yi = toRad(pts[i].lat) * R;
+            const xj = toRad(pts[j].lng) * R * Math.cos(toRad(pts[j].lat)), yj = toRad(pts[j].lat) * R;
+            area += xi * yj - xj * yi;
         }
-        return Math.abs(area/2);
+        return Math.abs(area / 2);
     }
-    function formatArea(sqm) { if(sqm>=10000) return (sqm/10000).toFixed(3)+' ga'; return sqm.toFixed(1)+' m²'; }
 
-    // Buffer
-    function addToBuffer(pt) { dataBuffer.push(pt); }
-    function flushBuffer() { if(!dataBuffer.length||!isConnected) return; const b=[...dataBuffer]; dataBuffer=[]; b.forEach(pt => db.ref('/history').push(pt).catch(()=>dataBuffer.push(pt))); }
-    setInterval(flushBuffer, DATA_SYNC_INTERVAL);
+    function formatArea(sqm) {
+        if (sqm >= 10000) return (sqm / 10000).toFixed(3) + ' ga';
+        return sqm.toFixed(1) + ' m²';
+    }
 
-    // Real-time data
-    db.ref("/current_pos").on("value", snap => {
-        const data = snap.val(); if(!data) return;
-        const now = Date.now(), lat = parseFloat(data.lat), lng = parseFloat(data.lng);
-        if (isNaN(lat)||isNaN(lng)) return;
-        lastPos = [lat, lng]; marker.setLatLng(lastPos);
+    // =================== RTK HOLATI NISHONI ===================
+    function updateRtkBadge(fixCode, fixStr) {
+        const badge = document.getElementById('rtkBadge');
+        badge.className = 'rtk-tag';
+        const code = parseInt(fixCode) || 0;
 
-        document.getElementById('latVal').textContent = lat.toFixed(7);
-        document.getElementById('lngVal').textContent = lng.toFixed(7);
-        document.getElementById('satVal').textContent = data.fix||data.satellites||'—';
-        document.getElementById('accVal').textContent = data.accuracy ? parseFloat(data.accuracy).toFixed(2) : '—';
-        document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString('uz');
+        if (code === 4) {
+            badge.classList.add('rtk-fixed');
+            badge.textContent = 'RTK FIXED (1-2 sm)';
+        } else if (code === 5) {
+            badge.classList.add('rtk-float');
+            badge.textContent = 'RTK FLOAT (10-30 sm)';
+        } else if (code === 2) {
+            badge.classList.add('rtk-dgps');
+            badge.textContent = 'DGPS (0.5-1 m)';
+        } else if (code === 1) {
+            badge.classList.add('rtk-gps');
+            badge.textContent = 'ODDIY GPS (2-5 m)';
+        } else {
+            badge.classList.add('rtk-none');
+            badge.textContent = fixStr || 'QIDIRILMOQDA';
+        }
+    }
+
+    // =================== DATA HANDLER ===================
+    function handleCurrentPosData(data) {
+        const now = Date.now();
+        const lat = parseFloat(data.lat);
+        const lng = parseFloat(data.lng);
+        if (isNaN(lat) || isNaN(lng)) return;
+
+        lastPos = [lat, lng];
+        marker.setLatLng(lastPos);
+
+        document.getElementById('latVal').textContent = lat.toFixed(8);
+        document.getElementById('lngVal').textContent = lng.toFixed(8);
+        document.getElementById('satVal').textContent = data.sat !== undefined ? data.sat : (data.fix || '—');
+        document.getElementById('hdopVal').textContent = data.hdop !== undefined ? parseFloat(data.hdop).toFixed(2) : (data.accuracy || '—');
+        document.getElementById('altVal').textContent = data.alt !== undefined ? parseFloat(data.alt).toFixed(1) + ' m' : '—';
+        
+        let timeStr = new Date().toLocaleTimeString('uz');
+        if (data.ts) {
+            const serverDate = new Date(data.ts);
+            if (!isNaN(serverDate.getTime())) timeStr = serverDate.toLocaleTimeString('uz');
+        }
+        document.getElementById('lastUpdate').textContent = timeStr;
+
+        updateRtkBadge(data.fix, data.fix_str);
+
+        if (data.speed !== undefined) {
+            currentSpeed = parseFloat(data.speed) || 0;
+        }
 
         if (isTracking) {
             if (prevPos) {
-                const dist = haversine(prevPos[0],prevPos[1],lat,lng);
-                if (dist < MIN_DISTANCE_THRESHOLD) return;
-                totalDistance += dist;
-                const dt = (now-prevTime)/1000;
-                if (dt>0) currentSpeed = (dist/dt)*3.6;
+                const dist = haversine(prevPos[0], prevPos[1], lat, lng);
+                if (dist >= MIN_DISTANCE_THRESHOLD) {
+                    totalDistance += dist;
+                    const dt = (now - prevTime) / 1000;
+                    if (dt > 0 && data.speed === undefined) {
+                        currentSpeed = (dist / dt) * 3.6;
+                    }
+                    prevPos = [lat, lng];
+                    prevTime = now;
+                    trackPoints.push({ lat, lng, fix: data.fix || null, hdop: data.hdop || null, alt: data.alt || null, timestamp: now });
+                    polyline.addLatLng(lastPos);
+                    map.panTo(lastPos);
+                    updateTrackStats();
+                }
+            } else {
+                prevPos = [lat, lng];
+                prevTime = now;
+                trackPoints.push({ lat, lng, fix: data.fix || null, hdop: data.hdop || null, alt: data.alt || null, timestamp: now });
+                polyline.addLatLng(lastPos);
+                map.panTo(lastPos);
+                updateTrackStats();
             }
-            prevPos = [lat,lng]; prevTime = now;
-            trackPoints.push({ lat, lng, fix:data.fix||null, accuracy:data.accuracy||null, timestamp:now });
-            polyline.addLatLng(lastPos); map.panTo(lastPos);
-            addToBuffer({ lat, lng, fix:data.fix||null, accuracy:data.accuracy||null, timestamp:now });
-            updateTrackStats();
         }
         lastDataTime = now;
-    }, () => { updateConnectionUI(); showToast("⚠ Ma'lumot olishda xatolik"); });
+    }
 
-    // Tracking
+    // =================== TRACKING ===================
     function startTracking() {
-        isTracking=true; trackStartTime=Date.now(); trackPoints=[]; totalDistance=0; currentSpeed=0; prevPos=null; prevTime=null; polyline.setLatLngs([]);
-        document.getElementById('btnStart').disabled=true; document.getElementById('btnStop').disabled=false;
-        document.getElementById('statusBox').className='status-badge recording';
-        document.getElementById('stateText').textContent='● Yozilmoqda...';
-        durationTimer = setInterval(()=>{ if(trackStartTime) document.getElementById('duration').textContent=formatDuration(Date.now()-trackStartTime); },1000);
-        showToast('✅ Trek boshlandi');
-    }
-    function stopTracking() {
-        isTracking=false; clearInterval(durationTimer);
-        document.getElementById('btnStart').disabled=false; document.getElementById('btnStop').disabled=true;
-        document.getElementById('statusBox').className='status-badge stopped';
-        document.getElementById('stateText').textContent="To'xtatildi";
-        currentSpeed=0; updateTrackStats(); flushBuffer();
-        showToast(`⏹ Trek to'xtatildi — ${trackPoints.length} nuqta`);
-    }
-    function updateTrackStats() {
-        document.getElementById('pointCount').textContent=trackPoints.length;
-        document.getElementById('totalDist').textContent=formatDist(totalDistance);
-        document.getElementById('speedVal').textContent=currentSpeed.toFixed(1)+' km/h';
-        document.getElementById('bigSpeed').textContent=Math.round(currentSpeed);
-        document.getElementById('bigPoints').textContent=trackPoints.length;
+        isTracking = true;
+        trackStartTime = Date.now();
+        trackPoints = [];
+        totalDistance = 0;
+        currentSpeed = 0;
+        prevPos = null;
+        prevTime = null;
+        polyline.setLatLngs([]);
+
+        document.getElementById('btnStart').disabled = true;
+        document.getElementById('btnStop').disabled = false;
+        document.getElementById('statusBox').className = 'status-badge recording';
+        document.getElementById('stateText').textContent = '● Trek yozilmoqda...';
+
+        durationTimer = setInterval(() => {
+            if (trackStartTime) {
+                document.getElementById('duration').textContent = formatDuration(Date.now() - trackStartTime);
+            }
+        }, 1000);
+
+        showToast('✅ Trek yozish boshlandi');
     }
 
-    // =================== MEASUREMENT TOOL ===================
+    function stopTracking() {
+        isTracking = false;
+        clearInterval(durationTimer);
+        document.getElementById('btnStart').disabled = false;
+        document.getElementById('btnStop').disabled = true;
+        document.getElementById('statusBox').className = 'status-badge stopped';
+        document.getElementById('stateText').textContent = "To'xtatildi";
+        currentSpeed = 0;
+        updateTrackStats();
+        showToast(`⏹ Trek to'xtatildi — ${trackPoints.length} nuqta qayd etildi`);
+    }
+
+    function updateTrackStats() {
+        document.getElementById('pointCount').textContent = trackPoints.length;
+        document.getElementById('totalDist').textContent = formatDist(totalDistance);
+        document.getElementById('speedVal').textContent = currentSpeed.toFixed(1) + ' km/h';
+        document.getElementById('bigSpeed').textContent = Math.round(currentSpeed);
+        document.getElementById('bigPoints').textContent = trackPoints.length;
+    }
+
+    // =================== O'LCHASH USKUNASI ===================
     function createMeasureMarker(latlng, index) {
         const color = index === 0 ? '#34d399' : '#f472b6';
         const icon = L.divIcon({
             className: '',
-            html: `<div style="width:20px;height:20px;border-radius:50%;background:${color};border:2px solid white;box-shadow:0 0 8px ${color}80;display:flex;align-items:center;justify-content:center;font-size:9px;color:white;font-weight:700;font-family:'JetBrains Mono',monospace;">${index+1}</div>`,
-            iconSize: [20,20], iconAnchor: [10,10]
+            html: `<div style="width:22px;height:22px;border-radius:50%;background:${color};border:2px solid white;box-shadow:0 0 10px ${color}90;display:flex;align-items:center;justify-content:center;font-size:10px;color:white;font-weight:700;font-family:'JetBrains Mono',monospace;">${index+1}</div>`,
+            iconSize: [22,22], iconAnchor: [11,11]
         });
         return L.marker(latlng, { icon, draggable: true });
     }
@@ -431,7 +658,7 @@
         document.getElementById('measurePanel').classList.add('active');
         document.getElementById('map').classList.add('measure-cursor');
         document.getElementById('statusBox').className = 'status-badge measuring';
-        document.getElementById('stateText').textContent = "📏 O'lchash — xaritaga bosing";
+        document.getElementById('stateText').textContent = "📏 Xaritaga bosib nuqtalar qo'ying";
         map.on('click', onMeasureClick);
         showToast("📏 Xaritaga bosib nuqta qo'ying");
     }
@@ -458,7 +685,9 @@
 
         if (idx > 0) {
             const prev = measurePoints[idx-1];
-            const line = L.polyline([[prev.lat,prev.lng],[latlng.lat,latlng.lng]], { color:'#f472b6', weight:3, opacity:0.8, dashArray:'6, 8' }).addTo(map);
+            const line = L.polyline([[prev.lat,prev.lng],[latlng.lat,latlng.lng]], {
+                color:'#f472b6', weight:3, opacity:0.8, dashArray:'6, 8'
+            }).addTo(map);
             measureLines.push(line);
 
             const dist = haversine(prev.lat, prev.lng, latlng.lat, latlng.lng);
@@ -471,7 +700,7 @@
     }
 
     function recalcMeasure() {
-        for (let i=0; i<measureMarkers.length; i++) {
+        for (let i = 0; i < measureMarkers.length; i++) {
             const ll = measureMarkers[i].getLatLng();
             measurePoints[i] = { lat: ll.lat, lng: ll.lng };
         }
@@ -479,8 +708,8 @@
         const segList = document.getElementById('measureList');
         segList.innerHTML = '';
 
-        for (let i=0; i<measurePoints.length-1; i++) {
-            const p1=measurePoints[i], p2=measurePoints[i+1];
+        for (let i = 0; i < measurePoints.length - 1; i++) {
+            const p1 = measurePoints[i], p2 = measurePoints[i+1];
             const dist = haversine(p1.lat, p1.lng, p2.lat, p2.lng);
             measureTotalDist += dist;
 
@@ -503,138 +732,202 @@
     function undoMeasure() {
         if (!measurePoints.length) return;
         measurePoints.pop();
-        const m = measureMarkers.pop(); if(m) map.removeLayer(m);
-        const l = measureLines.pop(); if(l) map.removeLayer(l);
-        const t = measureTooltips.pop(); if(t) map.removeLayer(t);
+        const m = measureMarkers.pop(); if (m) map.removeLayer(m);
+        const l = measureLines.pop(); if (l) map.removeLayer(l);
+        const t = measureTooltips.pop(); if (t) map.removeLayer(t);
         recalcMeasure();
     }
 
     function clearMeasure() {
-        measureMarkers.forEach(m=>map.removeLayer(m)); measureLines.forEach(l=>map.removeLayer(l)); measureTooltips.forEach(t=>map.removeLayer(t));
-        measurePoints=[]; measureMarkers=[]; measureLines=[]; measureTooltips=[]; measureTotalDist=0;
-        document.getElementById('measureList').innerHTML='';
-        document.getElementById('measureTotal').textContent='0 m';
-        document.getElementById('measureArea').textContent='—';
+        measureMarkers.forEach(m => map.removeLayer(m));
+        measureLines.forEach(l => map.removeLayer(l));
+        measureTooltips.forEach(t => map.removeLayer(t));
+        measurePoints = []; measureMarkers = []; measureLines = []; measureTooltips = []; measureTotalDist = 0;
+        document.getElementById('measureList').innerHTML = '';
+        document.getElementById('measureTotal').textContent = '0 m';
+        document.getElementById('measureArea').textContent = '—';
     }
 
-    // =================== SCREENSHOT ===================
+    // =================== RASMGA OLISH ===================
     function takeScreenshot() {
         showToast('📸 Rasm tayyorlanmoqda...', 3000);
         html2canvas(document.getElementById('map'), {
             useCORS: true, allowTaint: true, scale: 2, logging: false, backgroundColor: '#0a0e17'
         }).then(canvas => {
             const ctx = canvas.getContext('2d'), w = canvas.width;
-            ctx.fillStyle = 'rgba(10,14,23,0.85)'; ctx.fillRect(0, canvas.height-80, w, 80);
+            ctx.fillStyle = 'rgba(10,14,23,0.85)';
+            ctx.fillRect(0, canvas.height - 80, w, 80);
             ctx.fillStyle = '#e2e8f0'; ctx.font = 'bold 24px sans-serif';
-            ctx.fillText('RTK Tracker Pro', 20, canvas.height-48);
-            ctx.font = '18px monospace'; ctx.fillStyle = '#64748b';
-            ctx.fillText(`${new Date().toLocaleString('uz')} | Nuqtalar: ${trackPoints.length} | Masofa: ${formatDist(totalDistance)}`, 20, canvas.height-20);
-            if (measurePoints.length > 1) { ctx.fillStyle='#f472b6'; ctx.fillText(`O'lchov: ${formatDist(measureTotalDist)}`, w-400, canvas.height-20); }
-            const link = document.createElement('a'); link.download='rtk_map_'+dateStamp()+'.png'; link.href=canvas.toDataURL('image/png'); link.click();
+            ctx.fillText('RTK Tracker Pro', 20, canvas.height - 48);
+            ctx.font = '16px monospace'; ctx.fillStyle = '#94a3b8';
+            ctx.fillText(`${new Date().toLocaleString('uz')} | Nuqtalar: ${trackPoints.length} | Masofa: ${formatDist(totalDistance)}`, 20, canvas.height - 20);
+            
+            const link = document.createElement('a');
+            link.download = 'rtk_map_' + dateStamp() + '.png';
+            link.href = canvas.toDataURL('image/png');
+            link.click();
             showToast('✅ Rasm saqlandi');
-        }).catch(() => {
-            // Fallback
-            const mapSize = map.getSize(), canvas = document.createElement('canvas');
-            canvas.width = mapSize.x*2; canvas.height = mapSize.y*2;
-            const ctx = canvas.getContext('2d'); ctx.scale(2,2);
-            ctx.fillStyle = '#0a0e17'; ctx.fillRect(0,0,mapSize.x,mapSize.y);
-            ctx.fillStyle = '#e2e8f0'; ctx.font = 'bold 20px sans-serif'; ctx.textAlign = 'center';
-            ctx.fillText('RTK Tracker — Xarita rasmi', mapSize.x/2, 40);
-            ctx.font = '14px monospace'; ctx.fillStyle = '#64748b';
-            if(lastPos) ctx.fillText(`Lat: ${lastPos[0].toFixed(7)} | Lng: ${lastPos[1].toFixed(7)}`, mapSize.x/2, 65);
-            ctx.fillText(`Nuqtalar: ${trackPoints.length} | Masofa: ${formatDist(totalDistance)}`, mapSize.x/2, 85);
-            if (trackPoints.length > 1) {
-                ctx.strokeStyle='#34d399'; ctx.lineWidth=3; ctx.beginPath();
-                trackPoints.forEach((pt,i)=>{ const px=map.latLngToContainerPoint([pt.lat,pt.lng]); i===0?ctx.moveTo(px.x,px.y):ctx.lineTo(px.x,px.y); });
-                ctx.stroke();
-            }
-            if (measurePoints.length > 1) {
-                ctx.strokeStyle='#f472b6'; ctx.lineWidth=2; ctx.setLineDash([6,8]); ctx.beginPath();
-                measurePoints.forEach((pt,i)=>{ const px=map.latLngToContainerPoint([pt.lat,pt.lng]); i===0?ctx.moveTo(px.x,px.y):ctx.lineTo(px.x,px.y); });
-                ctx.stroke();
-                // Har bir segment masofasini yozish
-                ctx.setLineDash([]); ctx.fillStyle='#f472b6'; ctx.font='12px monospace'; ctx.textAlign='center';
-                for(let i=0; i<measurePoints.length-1; i++){
-                    const p1=measurePoints[i], p2=measurePoints[i+1];
-                    const px1=map.latLngToContainerPoint([p1.lat,p1.lng]), px2=map.latLngToContainerPoint([p2.lat,p2.lng]);
-                    const dist = haversine(p1.lat,p1.lng,p2.lat,p2.lng);
-                    ctx.fillText(formatDist(dist), (px1.x+px2.x)/2, (px1.y+px2.y)/2 - 8);
-                }
-            }
-            const link=document.createElement('a'); link.download='rtk_map_'+dateStamp()+'.png'; link.href=canvas.toDataURL('image/png'); link.click();
-            showToast('✅ Rasm saqlandi');
+        }).catch(err => {
+            console.error(err);
+            showToast("⚠ Rasm olishda xatolik yuz berdi");
         });
     }
 
-    // History
+    // =================== TARIXNI YUKLASH ===================
     function loadHistory() {
+        if (!db) { showToast("Firebase ulanmagan"); return; }
         showToast('📡 Tarix yuklanmoqda...');
         db.ref("/history").limitToLast(HISTORY_LIMIT).once("value", snap => {
             const data = snap.val();
             if (data) {
-                const path = Object.values(data).filter(pt=>pt.lat&&pt.lng).map(pt=>[parseFloat(pt.lat),parseFloat(pt.lng)]);
+                const points = Object.values(data).filter(pt => pt.lat && pt.lng);
+                const path = points.map(pt => [parseFloat(pt.lat), parseFloat(pt.lng)]);
                 historyLine.setLatLngs(path);
-                if(path.length>1) map.fitBounds(historyLine.getBounds(), {padding:[30,30]});
-                showToast(`📜 ${path.length} nuqta yuklandi`);
-            } else showToast('Tarix topilmadi');
-        }).catch(()=>showToast("⚠ Tarixni yuklashda xatolik"));
+                if (path.length > 1) {
+                    map.fitBounds(historyLine.getBounds(), { padding: [40, 40] });
+                } else if (path.length === 1) {
+                    map.setView(path[0], 18);
+                }
+                showToast(`📜 Bazasidan ${path.length} ta tarixiy nuqta yuklandi`);
+            } else {
+                showToast("Tarixda ma'lumot topilmadi");
+            }
+        }).catch(err => {
+            console.error(err);
+            showToast("⚠ Tarixni yuklashda xatolik: " + err.message);
+        });
     }
 
-    // Export
+    // =================== EKSPORT QILISH ===================
     function exportGeoJSON() {
-        if(!trackPoints.length){showToast("Trek bo'sh");return;}
-        const gj = { type:"FeatureCollection", features:[
-            { type:"Feature", geometry:{ type:"LineString", coordinates:trackPoints.map(p=>[p.lng,p.lat]) }, properties:{ points:trackPoints.length, distance_m:totalDistance, created:new Date().toISOString() } },
-            ...trackPoints.map((p,i)=>({ type:"Feature", geometry:{type:"Point",coordinates:[p.lng,p.lat]}, properties:{index:i,fix:p.fix,accuracy:p.accuracy,time:p.timestamp} }))
-        ]};
-        downloadFile(JSON.stringify(gj,null,2),'trek_'+dateStamp()+'.geojson','application/json'); showToast('✅ GeoJSON saqlandi');
-    }
-    function exportCSV() {
-        if(!trackPoints.length){showToast("Trek bo'sh");return;}
-        let csv='index,latitude,longitude,fix,accuracy,timestamp,datetime\n';
-        trackPoints.forEach((p,i)=>{ csv+=`${i},${p.lat},${p.lng},${p.fix||''},${p.accuracy||''},${p.timestamp},${new Date(p.timestamp).toISOString()}\n`; });
-        downloadFile(csv,'trek_'+dateStamp()+'.csv','text/csv'); showToast('✅ CSV saqlandi');
-    }
-    function exportGPX() {
-        if(!trackPoints.length){showToast("Trek bo'sh");return;}
-        let gpx=`<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="RTK Tracker Pro">\n<trk><name>RTK Trek ${dateStamp()}</name><trkseg>\n`;
-        trackPoints.forEach(p=>{gpx+=`<trkpt lat="${p.lat}" lon="${p.lng}"><time>${new Date(p.timestamp).toISOString()}</time></trkpt>\n`;});
-        gpx+=`</trkseg></trk>\n</gpx>`;
-        downloadFile(gpx,'trek_'+dateStamp()+'.gpx','application/gpx+xml'); showToast('✅ GPX saqlandi');
-    }
-    function exportMeasureCSV() {
-        if(measurePoints.length<2){showToast("O'lchov nuqtalari yo'q");return;}
-        let csv='segment,from_lat,from_lng,to_lat,to_lng,distance_m\n';
-        for(let i=0;i<measurePoints.length-1;i++){
-            const p1=measurePoints[i],p2=measurePoints[i+1],dist=haversine(p1.lat,p1.lng,p2.lat,p2.lng);
-            csv+=`${i+1}-${i+2},${p1.lat},${p1.lng},${p2.lat},${p2.lng},${dist.toFixed(3)}\n`;
-        }
-        csv+=`\nUmumiy_masofa,,,,,${measureTotalDist.toFixed(3)}\n`;
-        if(measurePoints.length>=3) csv+=`Yuzasi_m2,,,,,${calcArea(measurePoints).toFixed(2)}\n`;
-        downloadFile(csv,'olchov_'+dateStamp()+'.csv','text/csv'); showToast("✅ O'lchov saqlandi");
+        if (!trackPoints.length) { showToast("Eksport qilish uchun trek yozilmagan"); return; }
+        const gj = {
+            type: "FeatureCollection",
+            features: [
+                {
+                    type: "Feature",
+                    geometry: { type: "LineString", coordinates: trackPoints.map(p => [p.lng, p.lat]) },
+                    properties: { points: trackPoints.length, distance_m: totalDistance, created: new Date().toISOString() }
+                },
+                ...trackPoints.map((p, i) => ({
+                    type: "Feature",
+                    geometry: { type: "Point", coordinates: [p.lng, p.lat] },
+                    properties: { index: i, fix: p.fix, hdop: p.hdop, alt: p.alt, time: p.timestamp }
+                }))
+            ]
+        };
+        downloadFile(JSON.stringify(gj, null, 2), 'rtk_trek_' + dateStamp() + '.geojson', 'application/json');
+        showToast('✅ GeoJSON fayli yuklandi');
     }
 
-    // Event listeners
+    function exportCSV() {
+        if (!trackPoints.length) { showToast("Trek bo'sh"); return; }
+        let csv = 'index,latitude,longitude,fix_quality,hdop,altitude_m,timestamp,datetime\n';
+        trackPoints.forEach((p, i) => {
+            csv += `${i},${p.lat},${p.lng},${p.fix || ''},${p.hdop || ''},${p.alt || ''},${p.timestamp},${new Date(p.timestamp).toISOString()}\n`;
+        });
+        downloadFile(csv, 'rtk_trek_' + dateStamp() + '.csv', 'text/csv');
+        showToast('✅ CSV fayli yuklandi');
+    }
+
+    function exportGPX() {
+        if (!trackPoints.length) { showToast("Trek bo'sh"); return; }
+        let gpx = `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="RTK Tracker Pro">\n<trk><name>RTK Trek ${dateStamp()}</name><trkseg>\n`;
+        trackPoints.forEach(p => {
+            gpx += `  <trkpt lat="${p.lat}" lon="${p.lng}">${p.alt ? `<ele>${p.alt}</ele>` : ''}<time>${new Date(p.timestamp).toISOString()}</time></trkpt>\n`;
+        });
+        gpx += `</trkseg></trk>\n</gpx>`;
+        downloadFile(gpx, 'rtk_trek_' + dateStamp() + '.gpx', 'application/gpx+xml');
+        showToast('✅ GPX fayli yuklandi');
+    }
+
+    function exportMeasureCSV() {
+        if (measurePoints.length < 2) { showToast("O'lchov nuqtalari mavjud emas"); return; }
+        let csv = 'segment,from_lat,from_lng,to_lat,to_lng,distance_m\n';
+        for (let i = 0; i < measurePoints.length - 1; i++) {
+            const p1 = measurePoints[i], p2 = measurePoints[i+1];
+            const dist = haversine(p1.lat, p1.lng, p2.lat, p2.lng);
+            csv += `${i+1}-${i+2},${p1.lat},${p1.lng},${p2.lat},${p2.lng},${dist.toFixed(3)}\n`;
+        }
+        csv += `\nJami_Masofa_m,,,,,${measureTotalDist.toFixed(3)}\n`;
+        if (measurePoints.length >= 3) {
+            csv += `Maydon_Yuzasi_m2,,,,,${calcArea(measurePoints).toFixed(2)}\n`;
+        }
+        downloadFile(csv, 'rtk_olchov_' + dateStamp() + '.csv', 'text/csv');
+        showToast("✅ O'lchov natijalari saqlandi");
+    }
+
+    // =================== SOZLAMALAR MODALI ===================
+    const settingsModal = document.getElementById('settingsModal');
+    const cfgDbUrlInput = document.getElementById('cfgDatabaseUrl');
+
+    document.getElementById('btnOpenSettings').onclick = () => {
+        cfgDbUrlInput.value = currentDbUrl;
+        settingsModal.classList.add('active');
+    };
+    document.getElementById('btnCloseSettings').onclick = () => {
+        settingsModal.classList.remove('active');
+    };
+    document.getElementById('btnSaveSettings').onclick = () => {
+        const val = cfgDbUrlInput.value.trim();
+        if (val) {
+            currentDbUrl = val;
+            localStorage.setItem(STORAGE_KEY_DB_URL, currentDbUrl);
+            initFirebase(currentDbUrl);
+            settingsModal.classList.remove('active');
+            showToast("✅ Sozlamalar saqlandi");
+        }
+    };
+
+    // =================== EVENT TINGLOVCHILAR ===================
     document.getElementById('btnStart').onclick = startTracking;
     document.getElementById('btnStop').onclick = stopTracking;
-    document.getElementById('btnFindMe').onclick = () => { if(lastPos) map.flyTo(lastPos,19,{duration:0.8}); else showToast("GPS ma'lumoti yo'q"); };
+    document.getElementById('btnFindMe').onclick = () => {
+        if (lastPos) map.flyTo(lastPos, 19, { duration: 0.8 });
+        else showToast("GPS ma'lumoti hali kelmadi");
+    };
     document.getElementById('btnHistory').onclick = loadHistory;
-    document.getElementById('btnClear').onclick = () => { polyline.setLatLngs([]); historyLine.setLatLngs([]); trackPoints=[]; totalDistance=0; currentSpeed=0; clearMeasure(); updateTrackStats(); showToast('♻ Tozalandi'); };
-    document.getElementById('btnMeasure').onclick = () => { if(isMeasuring) stopMeasuring(); else startMeasuring(); };
+    document.getElementById('btnClear').onclick = () => {
+        polyline.setLatLngs([]);
+        historyLine.setLatLngs([]);
+        trackPoints = [];
+        totalDistance = 0;
+        currentSpeed = 0;
+        clearMeasure();
+        updateTrackStats();
+        showToast('♻ Tozalandi');
+    };
+    document.getElementById('btnMeasure').onclick = () => {
+        if (isMeasuring) stopMeasuring();
+        else startMeasuring();
+    };
     document.getElementById('btnMeasureUndo').onclick = undoMeasure;
     document.getElementById('btnMeasureClear').onclick = clearMeasure;
     document.getElementById('btnScreenshot').onclick = takeScreenshot;
-    document.getElementById('btnExport').onclick = () => document.getElementById('exportModal').classList.add('active');
-    document.getElementById('exportCancel').onclick = () => document.getElementById('exportModal').classList.remove('active');
-    document.getElementById('exportGeoJSON').onclick = () => { exportGeoJSON(); document.getElementById('exportModal').classList.remove('active'); };
-    document.getElementById('exportCSV').onclick = () => { exportCSV(); document.getElementById('exportModal').classList.remove('active'); };
-    document.getElementById('exportGPX').onclick = () => { exportGPX(); document.getElementById('exportModal').classList.remove('active'); };
-    document.getElementById('exportMeasure').onclick = () => { exportMeasureCSV(); document.getElementById('exportModal').classList.remove('active'); };
-    document.getElementById('exportModal').onclick = e => { if(e.target===e.currentTarget) e.target.classList.remove('active'); };
 
-    setInterval(()=>{ if(lastDataTime&&Date.now()-lastDataTime>10000){ document.getElementById('connDot').className='conn-dot syncing'; document.getElementById('connText').textContent="Ma'lumot kutilmoqda..."; } },5000);
+    // Eksport dialogi
+    const exportModal = document.getElementById('exportModal');
+    document.getElementById('btnExport').onclick = () => exportModal.classList.add('active');
+    document.getElementById('exportCancel').onclick = () => exportModal.classList.remove('active');
+    document.getElementById('exportGeoJSON').onclick = () => { exportGeoJSON(); exportModal.classList.remove('active'); };
+    document.getElementById('exportCSV').onclick = () => { exportCSV(); exportModal.classList.remove('active'); };
+    document.getElementById('exportGPX').onclick = () => { exportGPX(); exportModal.classList.remove('active'); };
+    document.getElementById('exportMeasure').onclick = () => { exportMeasureCSV(); exportModal.classList.remove('active'); };
+    exportModal.onclick = e => { if (e.target === e.currentTarget) e.target.classList.remove('active'); };
+    settingsModal.onclick = e => { if (e.target === e.currentTarget) e.target.classList.remove('active'); };
 
-    updateConnectionUI(); updateTrackStats();
+    // Ulanish vaqti monitoringi
+    setInterval(() => {
+        if (lastDataTime && Date.now() - lastDataTime > 8000) {
+            document.getElementById('connDot').className = 'conn-dot syncing';
+            document.getElementById('connText').textContent = "Ma'lumot kutilmoqda...";
+        }
+    }, 4000);
+
+    // Initsializatsiya
+    initFirebase(currentDbUrl);
+    updateConnectionUI();
+    updateTrackStats();
 })();
 </script>
 </body>

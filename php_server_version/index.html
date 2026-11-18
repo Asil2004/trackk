@@ -490,12 +490,16 @@
             pingEl.textContent = latency + 'ms';
 
             if (data && data.lat && data.lng) {
-                if (data.is_online) {
+                const age = data.age_sec !== undefined ? data.age_sec : 0;
+                if (data.is_online || age <= 15) {
                     dot.className = 'conn-dot online';
                     text.textContent = 'Server ulangan';
-                } else {
+                } else if (age <= 45) {
                     dot.className = 'conn-dot syncing';
-                    text.textContent = `GPS eskirgan (${data.age_sec}s)`;
+                    text.textContent = `GPS kutilmoqda (${age}s)`;
+                } else {
+                    dot.className = 'conn-dot';
+                    text.textContent = `Aloqa uzilgan (${age}s)`;
                 }
                 handleIncomingGps(data);
             } else if (data && data.status === 'waiting') {

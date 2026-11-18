@@ -1,6 +1,4 @@
 // Ushbu fayl php_server_version/track_http/track_http.ino bilan bir xil
-// Standalone Node/PHP server (https://trackk-gl6l.onrender.com/api.php) uchun optimallashtirilgan kod.
-
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
@@ -18,9 +16,9 @@ const char* password = "12345678";
 const char* serverApiUrl = "https://trackk-gl6l.onrender.com/api.php";
 
 // ============================================================================
-// 3. NTRIP SOZLAMALARI
+// 3. NTRIP SOZLAMALARI (Faqat Baza bo'lsa yoqing)
 // ============================================================================
-const bool  ENABLE_NTRIP = false; // Baza bo'lmasa false qiling (qotishni butunlay yo'qotadi!)
+const bool  ENABLE_NTRIP = false; // Baza bo'lmasa false qiling (qotishni va uzilishni yo'qotadi!)
 const char* host         = "rtk2go.com";
 const int   port         = 2101;
 const char* mountpoint   = "SAMARKAND";
@@ -36,15 +34,13 @@ const char* pw           = "none";
 
 HardwareSerial LG290P(2);
 WiFiClient ntripClient;
-WiFiClientSecure client;
-HTTPClient http;
 TinyGPSPlus gps;
 
 TinyGPSCustom fixQuality(gps, "GNGGA", 6);
 TinyGPSCustom hdopCustom(gps, "GNGGA", 8);
 TinyGPSCustom altCustom(gps, "GNGGA", 9);
 
-const unsigned long SEND_INTERVAL_MS = 1000;  // Serverga har 1.0 soniyada yuborish
+const unsigned long SEND_INTERVAL_MS = 1000;
 const unsigned long NTRIP_RETRY_MS   = 15000;
 const unsigned long NTRIP_GGA_MS     = 6000;
 
@@ -65,7 +61,6 @@ bool   hasFreshGps = false;
 String lastGgaSentence = "";
 String rawNmeaBuffer = "";
 bool isNtripHeaderSkipped = false;
-bool isHttpInitialized = false;
 
 String base64_encode(String text) {
   String res = "";
@@ -143,17 +138,13 @@ void maintainNTRIP() {
 void sendToServer(double lat, double lng, int sat, int fix, float hdop, float alt, float speed) {
   if (WiFi.status() != WL_CONNECTED) return;
 
-  if (!isHttpInitialized) {
-    client.setInsecure();
-    http.setReuse(true);
-    isHttpInitialized = true;
-  }
+  WiFiClientSecure client;
+  client.setInsecure();
 
-  if (!http.connected()) {
-    http.begin(client, serverApiUrl);
-    http.addHeader("Content-Type", "application/json");
-    http.setTimeout(2500);
-  }
+  HTTPClient http;
+  http.begin(client, serverApiUrl);
+  http.addHeader("Content-Type", "application/json");
+  http.setTimeout(2500);
 
   String payload = "{";
   payload += "\"lat\":\"" + String(lat, 8) + "\",";
@@ -169,12 +160,12 @@ void sendToServer(double lat, double lng, int sat, int fix, float hdop, float al
   int httpCode = http.POST(payload);
 
   if (httpCode == HTTP_CODE_OK || httpCode == 201) {
-    Serial.printf("[1s HTTP OK] Lat: %.8f, Lng: %.8f | Sat: %d | HDOP: %.2f | Speed: %.1f km/h\n",
+    Serial.printf("[1s OK] Lat: %.8f, Lng: %.8f | Sat: %d | HDOP: %.2f | Speed: %.1f km/h\n",
                   lat, lng, sat, hdop, speed);
-    digitalWrite(LED_PIN, !digitalRead(LED_PIN));
   } else {
-    http.end();
+    Serial.printf("[HTTP Xato: %d]\n", httpCode);
   }
+  http.end();
 }
 
 void setup() {
@@ -184,17 +175,19 @@ void setup() {
   Serial.begin(115200);
   delay(300);
 
-  // 1. UART RX buferini 2048 baytga oshirish (NMEA paketlari yo'qolmasligi uchun)
   LG290P.setRxBufferSize(2048);
   LG290P.begin(460800, SERIAL_8N1, RX2_PIN, TX2_PIN);
 
-  // 2. Quectel LG290P ni barcha yo'ldosh tizimlariga sozlash
   delay(150);
   LG290P.println("$PQTMCFGCNST,1,1,1,1,1,1*00");
   delay(100);
   LG290P.println("$PQTMCFGFIXRATE,1000*00");
 
-  // 3. WiFi ulanish
+  WiFi.mode(WIFI_STA);
+  WiFi.setAutoReconnect(true);
+  WiFi.persistent(true);
+  WiFi.setSleep(false);
+
   WiFi.begin(ssid, password);
   unsigned long wifiStart = millis();
   while (WiFi.status() != WL_CONNECTED && millis() - wifiStart < 15000) {
@@ -207,6 +200,17 @@ void setup() {
 }
 
 void loop() {
+  if (WiFi.status() != WL_CONNECTED) {
+    digitalWrite(LED_PIN, LOW);
+    static unsigned long lastWifiRetry = 0;
+    if (millis() - lastWifiRetry > 3000) {
+      lastWifiRetry = millis();
+      WiFi.reconnect();
+    }
+  } else {
+    digitalWrite(LED_PIN, HIGH);
+  }
+
   if (ENABLE_NTRIP) {
     maintainNTRIP();
   }

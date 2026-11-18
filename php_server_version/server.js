@@ -14,7 +14,7 @@ const currentPosFile = path.join(__dirname, 'current_pos.json');
 const historyFile    = path.join(__dirname, 'history.json');
 const targetPosFile  = path.join(__dirname, 'target_pos.json');
 const maxHistoryPoints = 1500;
-const onlineTimeoutMs  = 6000;
+const onlineTimeoutMs  = 20000; // 20 soniya (mobil internetda uzilish ko'rsatmasligi uchun)
 
 function sendCors(res) {
     res.setHeader('Access-Control-Allow-Origin', '*');

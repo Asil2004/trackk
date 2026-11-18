@@ -17,7 +17,7 @@ $currentPosFile   = __DIR__ . '/current_pos.json';
 $historyFile      = __DIR__ . '/history.json';
 $targetPosFile    = __DIR__ . '/target_pos.json';
 $maxHistoryPoints = 1500; // Tarixda saqlanadigan maksimal nuqtalar soni
-$onlineTimeoutMs  = 6000; // 6 soniya ichida yangilansa — robot online hisoblanadi
+$onlineTimeoutMs  = 20000; // 20 soniya ichida yangilansa — online hisoblanadi
 
 // ============================================================================
 // 1. POST SO'ROVLARI (ESP32 yoki Veb-xaritadan yozish)

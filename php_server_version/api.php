@@ -112,6 +112,14 @@ if ($action === 'robot') {
     }
 
     $current = json_decode(file_get_contents($currentPosFile), true);
+    if (!$current || !isset($current['lat']) || !isset($current['lng'])) {
+        echo json_encode([
+            "status"    => "waiting",
+            "is_online" => false,
+            "message"   => "Hali GPS koordinatalari kelmagan"
+        ]);
+        exit;
+    }
     $serverNow = round(microtime(true) * 1000);
     $posTs = isset($current['server_ts']) ? $current['server_ts'] : (isset($current['ts']) ? $current['ts'] : $serverNow);
     $ageMs = max(0, $serverNow - $posTs);

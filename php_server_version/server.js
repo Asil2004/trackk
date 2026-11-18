@@ -126,7 +126,16 @@ const server = http.createServer((req, res) => {
                     res.end(JSON.stringify({ status: 'waiting', is_online: false, message: 'Kutilmoqda' }));
                     return;
                 }
-                const current = JSON.parse(fs.readFileSync(currentPosFile, 'utf8'));
+                let current = null;
+                try {
+                    current = JSON.parse(fs.readFileSync(currentPosFile, 'utf8'));
+                } catch (e) {}
+
+                if (!current || current.lat === undefined || current.lng === undefined) {
+                    res.end(JSON.stringify({ status: 'waiting', is_online: false, message: 'Hali GPS kelmagan' }));
+                    return;
+                }
+
                 const serverNow = Date.now();
                 const ageMs = Math.max(0, serverNow - (current.server_ts || serverNow));
                 const isOnline = (ageMs <= onlineTimeoutMs);
@@ -162,7 +171,14 @@ const server = http.createServer((req, res) => {
                     res.end('$ROBOT,0,0,0,99.9,0.0,0,9999\n');
                     return;
                 }
-                const current = JSON.parse(fs.readFileSync(currentPosFile, 'utf8'));
+                let current = null;
+                try {
+                    current = JSON.parse(fs.readFileSync(currentPosFile, 'utf8'));
+                } catch (e) {}
+                if (!current || current.lat === undefined || current.lng === undefined) {
+                    res.end('$ROBOT,0,0,0,99.9,0.0,0,9999\n');
+                    return;
+                }
                 const serverNow = Date.now();
                 const ageMs = Math.max(0, serverNow - (current.server_ts || serverNow));
                 const isOnline = (ageMs <= onlineTimeoutMs) ? 1 : 0;

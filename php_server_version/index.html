@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>RTK Tracker Pro — PHP Server Versiyasi</title>
+    <title>RTK Tracker Pro & Robot Navigatsiya</title>
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/854/854878.png">
@@ -28,6 +28,7 @@
             --success: #34d399;
             --danger: #f87171;
             --warning: #fbbf24;
+            --target: #ec4899;
             --text: #e2e8f0;
             --text-dim: #94a3b8;
             --glow: 0 0 20px rgba(56, 189, 248, 0.15);
@@ -40,7 +41,7 @@
 
         .dashboard {
             position: absolute; top: 12px; left: 12px; z-index: 1000;
-            width: 300px; background: var(--card);
+            width: 310px; background: var(--card);
             backdrop-filter: blur(20px); border-radius: 16px;
             box-shadow: var(--glow), 0 8px 32px rgba(0,0,0,0.6);
             padding: 16px; border: 1px solid var(--border);
@@ -112,6 +113,7 @@
         .status-badge.recording { background: rgba(52,211,153,0.12); border-color: rgba(52,211,153,0.4); color: var(--success); }
         .status-badge.stopped { background: rgba(248,113,113,0.12); border-color: rgba(248,113,113,0.4); color: var(--danger); }
         .status-badge.measuring { background: rgba(244,114,182,0.12); border-color: rgba(244,114,182,0.4); color: var(--measure); }
+        .status-badge.target-mode { background: rgba(236,72,153,0.12); border-color: rgba(236,72,153,0.4); color: var(--target); }
 
         .btn-group { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; }
         .btn-row { display: flex; gap: 5px; }
@@ -130,6 +132,8 @@
         .btn-stop { background: linear-gradient(135deg, #dc2626, #f87171); }
         .btn-focus { background: linear-gradient(135deg, #d97706, #fbbf24); color: #1a1a1a; }
         .btn-history { background: linear-gradient(135deg, #2563eb, var(--accent)); }
+        .btn-target { background: linear-gradient(135deg, #be185d, var(--target)); }
+        .btn-target.active { box-shadow: 0 0 16px rgba(236,72,153,0.6); animation: pulse 1.2s infinite; }
         .btn-export { background: linear-gradient(135deg, #7c3aed, var(--accent2)); }
         .btn-measure { background: linear-gradient(135deg, #db2777, #f472b6); }
         .btn-measure.active { box-shadow: 0 0 16px rgba(244,114,182,0.5); animation: pulse 1.2s infinite; }
@@ -141,6 +145,14 @@
         .stats-item { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; padding: 2px 0; }
         .stats-item b { color: var(--text); font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 600; }
         .stats-divider { height: 1px; background: var(--border); margin: 8px 0; }
+
+        .target-box {
+            display: none; margin-top: 8px; padding: 8px 10px; border-radius: 8px;
+            border: 1px solid rgba(236,72,153,0.3); background: rgba(236,72,153,0.06);
+            font-size: 11px;
+        }
+        .target-box.active { display: block; }
+        .target-box span { color: var(--target); font-weight: 600; }
 
         .measure-panel { display: none; margin-top: 8px; padding: 10px; border-radius: 10px; border: 1px solid rgba(244,114,182,0.3); background: rgba(244,114,182,0.05); }
         .measure-panel.active { display: block; }
@@ -185,7 +197,7 @@
         .modal-overlay.active { display: flex; }
         .modal {
             background: var(--card); border: 1px solid var(--border);
-            border-radius: 16px; padding: 20px; width: 320px; box-shadow: var(--glow);
+            border-radius: 16px; padding: 20px; width: 330px; box-shadow: var(--glow);
         }
         .modal h3 { color: var(--text); font-size: 15px; margin-bottom: 12px; }
         .modal button { width: 100%; margin-bottom: 6px; }
@@ -199,6 +211,12 @@
             font-family: 'JetBrains Mono', monospace; font-size: 11px;
         }
         .form-input:focus { outline: none; border-color: var(--accent); }
+
+        .robot-links {
+            background: rgba(255,255,255,0.03); border: 1px solid var(--border);
+            border-radius: 8px; padding: 10px; margin-bottom: 12px; font-size: 11px;
+        }
+        .robot-links a { color: var(--accent); text-decoration: none; word-break: break-all; display: block; margin-top: 3px; }
 
         .toast {
             position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
@@ -231,10 +249,10 @@
 <div class="dashboard" id="dashboard">
     <div class="logo">
         <div class="logo-left">
-            <div class="logo-icon">🌐</div>
+            <div class="logo-icon">🤖</div>
             <div>
-                <h2>RTK Web Tracker</h2>
-                <small>Mustaqil PHP Server</small>
+                <h2>RTK Nav & Robot</h2>
+                <small>Qalqon Roboti Boshqaruvi</small>
             </div>
         </div>
         <button class="btn-settings-icon" id="btnOpenSettings" title="Server Sozlamalari">⚙</button>
@@ -264,16 +282,24 @@
         </div>
         <div class="btn-row">
             <button class="btn-focus" id="btnFindMe">📍 Hozirgi nuqta</button>
+            <button class="btn-target" id="btnSetTarget">🎯 Robot Maqsadi</button>
+        </div>
+        <div class="btn-row">
             <button class="btn-history" id="btnHistory">📜 Tarix</button>
-        </div>
-        <div class="btn-row">
             <button class="btn-measure" id="btnMeasure">📏 O'lchash</button>
-            <button class="btn-screenshot" id="btnScreenshot">📸 Rasm</button>
         </div>
         <div class="btn-row">
+            <button class="btn-screenshot" id="btnScreenshot">📸 Rasm</button>
             <button class="btn-export" id="btnExport">📤 Eksport</button>
-            <button class="btn-clear" id="btnClear">♻ Tozalash</button>
         </div>
+        <button class="btn-clear" id="btnClear" style="margin-top:2px;">♻ Tozalash</button>
+    </div>
+
+    <!-- Robot Maqsadi Paneli -->
+    <div class="target-box" id="targetBox">
+        <div><span>🎯 Robot Maqsadi:</span></div>
+        <div id="targetCoords" style="font-family:'JetBrains Mono'; font-size:10px; margin-top:2px;">—</div>
+        <div id="targetDistance" style="font-weight:600; color:var(--text); margin-top:3px;">Masofa: —</div>
     </div>
 
     <div class="stats">
@@ -340,11 +366,20 @@
 <!-- Settings Modal -->
 <div class="modal-overlay" id="settingsModal">
     <div class="modal">
-        <h3>⚙ Server Sozlamalari</h3>
+        <h3>⚙ Server va Robot API</h3>
         <div class="form-group">
             <label for="cfgApiUrl">api.php manzili (URL):</label>
             <input type="text" id="cfgApiUrl" class="form-input" placeholder="api.php yoki https://saytingiz.uz/api.php">
         </div>
+        
+        <div class="robot-links">
+            <b>🤖 Robot uchun Endpointlar:</b>
+            <div style="margin-top:4px; font-size:10px; color:var(--text-dim);">JSON format (Python/ROS):</div>
+            <a id="linkRobotJson" target="_blank" href="#">api.php?action=robot</a>
+            <div style="margin-top:6px; font-size:10px; color:var(--text-dim);">Raw CSV (Arduino/ESP):</div>
+            <a id="linkRobotRaw" target="_blank" href="#">api.php?action=robot_raw</a>
+        </div>
+
         <button class="btn-history" id="btnSaveSettings">Saqlash</button>
         <button class="btn-cancel" id="btnCloseSettings">Yopish</button>
     </div>
@@ -360,7 +395,7 @@
     const DEFAULT_API_URL = "api.php";
     const DEFAULT_CENTER = [39.65, 66.95];
     const DEFAULT_ZOOM = 16;
-    const POLL_INTERVAL = 1500; // Har 1.5 soniyada serverdan so'rash
+    const POLL_INTERVAL = 1200; // Har 1.2 soniyada serverdan so'rash
     const MIN_DISTANCE_THRESHOLD = 0.5;
 
     let apiUrl = localStorage.getItem(STORAGE_KEY_API_URL) || DEFAULT_API_URL;
@@ -368,6 +403,7 @@
     let trackPoints = [], trackStartTime = null, totalDistance = 0, currentSpeed = 0;
     let durationTimer = null, pollTimer = null;
 
+    let isTargetMode = false, targetPos = null, targetMarker = null, targetLine = null;
     let isMeasuring = false, measurePoints = [], measureMarkers = [], measureLines = [], measureTooltips = [];
     let measureTotalDist = 0;
 
@@ -386,6 +422,13 @@
                <style>@keyframes ping{75%,100%{transform:scale(2.2);opacity:0}}</style>`,
         iconSize: [20,20],
         iconAnchor: [10,10]
+    });
+
+    const targetIcon = L.divIcon({
+        className: '',
+        html: `<div style="width:26px;height:26px;border-radius:50%;background:#ec4899;border:3px solid white;box-shadow:0 0 16px rgba(236,72,153,0.9);display:flex;align-items:center;justify-content:center;font-size:12px;">🎯</div>`,
+        iconSize: [26,26],
+        iconAnchor: [13,13]
     });
 
     let marker = L.marker([0,0], { icon: markerIcon }).addTo(map);
@@ -474,7 +517,7 @@
         }
     }
 
-    // =================== SERVERDAN JONLI MA'LUMOT OLISH ===================
+    // =================== JONLI MA'LUMOT ===================
     async function fetchCurrentPos() {
         const dot = document.getElementById('connDot');
         const text = document.getElementById('connText');
@@ -483,14 +526,19 @@
 
         try {
             const separator = apiUrl.includes('?') ? '&' : '?';
-            const res = await fetch(`${apiUrl}${separator}action=pos&_=${Date.now()}`);
+            const res = await fetch(`${apiUrl}${separator}action=robot&_=${Date.now()}`);
             const data = await res.json();
             const latency = Math.round(performance.now() - startT);
             pingEl.textContent = latency + 'ms';
 
             if (data && data.lat && data.lng) {
-                dot.className = 'conn-dot online';
-                text.textContent = 'Server ulangan';
+                if (data.is_online) {
+                    dot.className = 'conn-dot online';
+                    text.textContent = 'Robot va Server ulangan';
+                } else {
+                    dot.className = 'conn-dot syncing';
+                    text.textContent = `GPS eskirgan (${data.age_sec}s)`;
+                }
                 handleIncomingGps(data);
             } else if (data && data.status === 'waiting') {
                 dot.className = 'conn-dot syncing';
@@ -525,6 +573,13 @@
             currentSpeed = parseFloat(data.speed) || 0;
         }
 
+        // Maqsadgacha masofani yangilash
+        if (targetPos) {
+            const d = haversine(lat, lng, targetPos[0], targetPos[1]);
+            document.getElementById('targetDistance').textContent = `Masofa: ${formatDist(d)}`;
+            if (targetLine) targetLine.setLatLngs([[lat, lng], targetPos]);
+        }
+
         if (isTracking) {
             if (prevPos) {
                 const dist = haversine(prevPos[0], prevPos[1], lat, lng);
@@ -549,6 +604,71 @@
                 map.panTo(lastPos);
                 updateTrackStats();
             }
+        }
+    }
+
+    // =================== ROBOT MAQSADI (TARGET / WAYPOINT) ===================
+    function toggleTargetMode() {
+        if (isTargetMode) {
+            isTargetMode = false;
+            document.getElementById('btnSetTarget').classList.remove('active');
+            map.off('click', onTargetMapClick);
+            if (!isTracking) {
+                document.getElementById('statusBox').className = 'status-badge';
+                document.getElementById('stateText').textContent = 'Tizim tayyor';
+            }
+        } else {
+            isTargetMode = true;
+            if (isMeasuring) stopMeasuring();
+            document.getElementById('btnSetTarget').classList.add('active');
+            document.getElementById('statusBox').className = 'status-badge target-mode';
+            document.getElementById('stateText').textContent = '🎯 Xaritaga bosing: Robot Maqsadi';
+            map.on('click', onTargetMapClick);
+            showToast('🎯 Xaritaga bosib robot borishi kerak bo\'lgan joyni belgilang');
+        }
+    }
+
+    function onTargetMapClick(e) {
+        targetPos = [e.latlng.lat, e.latlng.lng];
+        if (!targetMarker) {
+            targetMarker = L.marker(targetPos, { icon: targetIcon, draggable: true }).addTo(map);
+            targetMarker.on('dragend', () => {
+                const ll = targetMarker.getLatLng();
+                targetPos = [ll.lat, ll.lng];
+                saveTargetToServer(targetPos[0], targetPos[1]);
+            });
+        } else {
+            targetMarker.setLatLng(targetPos);
+        }
+
+        if (lastPos) {
+            if (!targetLine) {
+                targetLine = L.polyline([lastPos, targetPos], { color:'#ec4899', weight:3, dashArray:'6,8' }).addTo(map);
+            } else {
+                targetLine.setLatLngs([lastPos, targetPos]);
+            }
+            const d = haversine(lastPos[0], lastPos[1], targetPos[0], targetPos[1]);
+            document.getElementById('targetDistance').textContent = `Masofa: ${formatDist(d)}`;
+        }
+
+        document.getElementById('targetBox').classList.add('active');
+        document.getElementById('targetCoords').textContent = `${targetPos[0].toFixed(8)}, ${targetPos[1].toFixed(8)}`;
+
+        saveTargetToServer(targetPos[0], targetPos[1]);
+        toggleTargetMode(); // Belgilab bo'lgach rejimdan chiqish
+    }
+
+    async function saveTargetToServer(lat, lng) {
+        try {
+            const separator = apiUrl.includes('?') ? '&' : '?';
+            await fetch(`${apiUrl}${separator}action=set_target`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ lat, lng })
+            });
+            showToast('✅ Robot maqsadi serverga yuborildi');
+        } catch (e) {
+            showToast('⚠ Maqsadni yuborishda xatolik');
         }
     }
 
@@ -610,6 +730,7 @@
 
     function startMeasuring() {
         isMeasuring = true;
+        if (isTargetMode) toggleTargetMode();
         document.getElementById('btnMeasure').classList.add('active');
         document.getElementById('measurePanel').classList.add('active');
         document.getElementById('map').classList.add('measure-cursor');
@@ -736,12 +857,12 @@
             ctx.fillStyle = 'rgba(10,14,23,0.85)';
             ctx.fillRect(0, canvas.height - 80, w, 80);
             ctx.fillStyle = '#e2e8f0'; ctx.font = 'bold 24px sans-serif';
-            ctx.fillText('RTK Web Tracker', 20, canvas.height - 48);
+            ctx.fillText('RTK Robot Navigation Pro', 20, canvas.height - 48);
             ctx.font = '16px monospace'; ctx.fillStyle = '#94a3b8';
             ctx.fillText(`${new Date().toLocaleString('uz')} | Nuqtalar: ${trackPoints.length} | Masofa: ${formatDist(totalDistance)}`, 20, canvas.height - 20);
             
             const link = document.createElement('a');
-            link.download = 'rtk_map_' + dateStamp() + '.png';
+            link.download = 'rtk_robot_map_' + dateStamp() + '.png';
             link.href = canvas.toDataURL('image/png');
             link.click();
             showToast('✅ Rasm saqlandi');
@@ -811,8 +932,17 @@
     const settingsModal = document.getElementById('settingsModal');
     const cfgApiInput = document.getElementById('cfgApiUrl');
 
+    function updateModalLinks() {
+        const sep = apiUrl.includes('?') ? '&' : '?';
+        document.getElementById('linkRobotJson').href = `${apiUrl}${sep}action=robot`;
+        document.getElementById('linkRobotJson').textContent = `${apiUrl}${sep}action=robot`;
+        document.getElementById('linkRobotRaw').href = `${apiUrl}${sep}action=robot_raw`;
+        document.getElementById('linkRobotRaw').textContent = `${apiUrl}${sep}action=robot_raw`;
+    }
+
     document.getElementById('btnOpenSettings').onclick = () => {
         cfgApiInput.value = apiUrl;
+        updateModalLinks();
         settingsModal.classList.add('active');
     };
     document.getElementById('btnCloseSettings').onclick = () => settingsModal.classList.remove('active');
@@ -834,6 +964,7 @@
         if (lastPos) map.flyTo(lastPos, 19, { duration: 0.8 });
         else showToast("GPS ma'lumoti hali kelmadi");
     };
+    document.getElementById('btnSetTarget').onclick = toggleTargetMode;
     document.getElementById('btnHistory').onclick = loadHistory;
     document.getElementById('btnClear').onclick = () => {
         polyline.setLatLngs([]);
@@ -844,9 +975,15 @@
         clearMeasure();
         updateTrackStats();
         
-        // Serverdagi tarixni ham tozalash
+        if (targetMarker) { map.removeLayer(targetMarker); targetMarker = null; }
+        if (targetLine) { map.removeLayer(targetLine); targetLine = null; }
+        targetPos = null;
+        document.getElementById('targetBox').classList.remove('active');
+
+        // Serverdagi tarix va maqsadni tozalash
         const separator = apiUrl.includes('?') ? '&' : '?';
         fetch(`${apiUrl}${separator}action=clear`).catch(()=>{});
+        fetch(`${apiUrl}${separator}action=clear_target`).catch(()=>{});
         showToast('♻ Tozalandi');
     };
     document.getElementById('btnMeasure').onclick = () => {
@@ -867,7 +1004,7 @@
     exportModal.onclick = e => { if (e.target === e.currentTarget) e.target.classList.remove('active'); };
     settingsModal.onclick = e => { if (e.target === e.currentTarget) e.target.classList.remove('active'); };
 
-    // Polling boshlash
+    // Boshlash
     fetchCurrentPos();
     pollTimer = setInterval(fetchCurrentPos, POLL_INTERVAL);
     updateTrackStats();

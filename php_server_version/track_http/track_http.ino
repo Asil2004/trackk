@@ -9,8 +9,8 @@
 // 1. WiFi SOZLAMALARI (Telefoningiz Hotspot nomini to'g'ri yozing!)
 // ============================================================================
 // DIQQAT: Telefoningiz hotspot nomini va parolini tekshiring:
-const char* ssid     = "Redmi Note 14"; // Agar nom boshqacha bo'lsa, o'zgartiring!
-const char* password = "11111111";       // Hotspot paroli
+const char* ssid     = "cail";
+const char* password = "12345678";
 
 // ============================================================================
 // 2. SERVER MANZILI (Render.com)

@@ -77,10 +77,40 @@ String base64_encode(String text) {
 const char* getFixTypeStr(int fixCode) {
   switch (fixCode) {
     case 4: return "RTK FIXED (1-2 sm)";
-    case 5: return "RTK FLOAT (10-30 sm)";
-    case 2: return "DGPS (0.5-1 m)";
-    case 1: return "Oddiy GPS (2-5 m)";
+    case 5: return "RTK/PPP FLOAT (10-30 sm)";
+    case 2: return "DGPS/HAS (20 sm - 1 m)";
+    case 1: return "Oddiy 3D (Ko'p chastota)";
     default: return "Signal qidirilmoqda";
+  }
+}
+
+// Quectel LG290P NMEA buyruqlarini aniq XOR checksum bilan jo'natish funksiyasi
+void sendQuectelCmd(const String& cmd) {
+  String core = cmd;
+  if (core.startsWith("$")) core = core.substring(1);
+  int starIdx = core.indexOf('*');
+  if (starIdx >= 0) core = core.substring(0, starIdx);
+
+  uint8_t checksum = 0;
+  for (unsigned int i = 0; i < core.length(); i++) {
+    checksum ^= core[i];
+  }
+
+  char buf[8];
+  sprintf(buf, "*%02X", checksum);
+  String fullCmd = "$" + core + String(buf);
+  LG290P.println(fullCmd);
+  Serial.print("[LG290P CMD] ");
+  Serial.println(fullCmd);
+
+  // Moduldan tasdiq (ACK) javobini o'qish
+  unsigned long t0 = millis();
+  while (millis() - t0 < 250) {
+    while (LG290P.available()) {
+      char c = LG290P.read();
+      Serial.write(c);
+    }
+    delay(10);
   }
 }
 
@@ -146,11 +176,19 @@ void setup() {
   LG290P.begin(460800, SERIAL_8N1, RX2_PIN, TX2_PIN);
   Serial.println("[UART] LG290P ulandi (460800 baud, 2048B bufer).");
 
-  // 3. Quectel LG290P sozlamalari
-  delay(150);
-  LG290P.println("$PQTMCFGCNST,1,1,1,1,1,1*00"); // Barcha yo'ldoshlar
+  // 3. Quectel LG290P sozlamalari (Galileo HAS va Ko'p chastotali yuqori aniqlik)
+  delay(200);
+  Serial.println("[LG290P] Galileo HAS va barcha sun'iy yo'ldoshlar yoqilmoqda...");
+  sendQuectelCmd("PQTMCFGCNST,1,1,1,1,1,1"); // Barcha yo'ldoshlar: GPS, GLO, GAL, BDS, QZSS, NavIC
   delay(100);
-  LG290P.println("$PQTMCFGFIXRATE,1000*00");      // 1000 ms
+  sendQuectelCmd("PQTMCFGSBAS,1");            // SBAS differensial tizimi
+  delay(100);
+  sendQuectelCmd("PQTMCFGPPP,W,2,1");        // Galileo HAS (High Accuracy Service - E6B bepul PPP)
+  delay(100);
+  sendQuectelCmd("PQTMCFGFIXRATE,1000");     // 1000 ms (1 Hz) yangilanish
+  delay(100);
+  sendQuectelCmd("PQTMSAVEPAR");             // Sozlamalarni modul xotirasiga saqlash (NVM)
+  delay(150);
 
   // 4. WiFi ulanish — UZILIB QOLMASLIK REJIMI
   WiFi.mode(WIFI_STA);

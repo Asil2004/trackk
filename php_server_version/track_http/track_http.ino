@@ -15,13 +15,14 @@ const char* password = "12345678";
 const char* serverApiUrl = "https://trackk-gl6l.onrender.com/api.php";
 
 // ============================================================================
-// 3. NTRIP SOZLAMALARI (RTK Baza Stansiyasi)
+// 3. NTRIP SOZLAMALARI (Agar baza stansiyangiz bo'lsa yoqing)
 // ============================================================================
-const char* host       = "rtk2go.com";
-const int   port       = 2101;
-const char* mountpoint = "SAMARKAND";
-const char* user       = "rasil8004@gmail.com";
-const char* pw         = "none";
+const bool  ENABLE_NTRIP = false; // Baza bo'lmasa false qiling (qotishni yo'qotadi!)
+const char* host         = "rtk2go.com";
+const int   port         = 2101;
+const char* mountpoint   = "SAMARKAND";
+const char* user         = "rasil8004@gmail.com";
+const char* pw           = "none";
 
 // ============================================================================
 // 4. USKUNA PINLARI VA OBYEKTLAR
@@ -32,31 +33,41 @@ const char* pw         = "none";
 
 HardwareSerial LG290P(2);
 WiFiClient ntripClient;
+WiFiClientSecure client;
+HTTPClient http;
 TinyGPSPlus gps;
 
 // NMEA GNGGA dan RTK parametrlarini ajratib olish:
-// 6-maydon: Fix Quality (0=Invalid, 1=GPS, 2=DGPS, 4=RTK Fixed, 5=RTK Float)
 TinyGPSCustom fixQuality(gps, "GNGGA", 6);
-// 8-maydon: HDOP (gorizontal aniqlik xatosi)
 TinyGPSCustom hdopCustom(gps, "GNGGA", 8);
-// 9-maydon: Dengiz sathidan balandlik
 TinyGPSCustom altCustom(gps, "GNGGA", 9);
 
 // ============================================================================
-// VAQT VA HISOB-KITOBLAR
+// VAQT VA TEZLIK SOZLAMALARI
 // ============================================================================
-const unsigned long SEND_INTERVAL_MS = 1500;  // Serverga har 1.5 soniyada yuborish
-const unsigned long NTRIP_RETRY_MS   = 8000;  // NTRIP uzilsa har 8 soniyada qayta ulanish
-const unsigned long NTRIP_GGA_MS     = 6000;  // NTRIP serverga har 6 soniyada GGA yuborish
+const unsigned long SEND_INTERVAL_MS = 1000;  // Serverga har 1.0 soniyada yuborish (juda tez!)
+const unsigned long NTRIP_RETRY_MS   = 15000; // NTRIP uzilsa har 15 soniyada urinish
+const unsigned long NTRIP_GGA_MS     = 6000;
 
 unsigned long lastSendTime = 0;
 unsigned long lastNtripAttempt = 0;
 unsigned long lastNtripGgaTime = 0;
 unsigned long totalRtcmBytes = 0;
 
+// Eng so'nggi yangilangan koordinatalar keshi (Buffer drop bo'lmasligi uchun)
+double latestLat   = 0.0;
+double latestLng   = 0.0;
+int    latestSat   = 0;
+int    latestFix   = 1;
+float  latestHdop  = 99.9;
+float  latestAlt   = 0.0;
+float  latestSpeed = 0.0;
+bool   hasFreshGps = false;
+
 String lastGgaSentence = "";
 String rawNmeaBuffer = "";
 bool isNtripHeaderSkipped = false;
+bool isHttpInitialized = false;
 
 // Base64 kodlash (NTRIP Basic Auth uchun)
 String base64_encode(String text) {
@@ -74,7 +85,6 @@ String base64_encode(String text) {
   return res;
 }
 
-// RTK Fix holati matni
 const char* getFixTypeStr(int fixCode) {
   switch (fixCode) {
     case 4: return "RTK FIXED (1-2 sm)";
@@ -86,17 +96,16 @@ const char* getFixTypeStr(int fixCode) {
 }
 
 // ============================================================================
-// NTRIP ALOQASI VA RTCM QABUL QILISH (RTK FIXED UCHUN ASOSIY QISM)
+// NTRIP ALOQASI VA RTCM QABUL QILISH (Faqat ENABLE_NTRIP=true bo'lganda)
 // ============================================================================
 void maintainNTRIP() {
-  if (WiFi.status() != WL_CONNECTED) return;
+  if (!ENABLE_NTRIP || WiFi.status() != WL_CONNECTED) return;
 
-  // 1. Agar ulanmagan bo'lsa, qayta ulanish
   if (!ntripClient.connected()) {
     isNtripHeaderSkipped = false;
     if (millis() - lastNtripAttempt > NTRIP_RETRY_MS) {
       lastNtripAttempt = millis();
-      Serial.printf("[NTRIP] Serverga ulanmoqda: %s:%d/%s...\n", host, port, mountpoint);
+      Serial.printf("[NTRIP] Ulanmoqda: %s:%d/%s...\n", host, port, mountpoint);
       
       ntripClient.stop();
       if (ntripClient.connect(host, port)) {
@@ -106,32 +115,23 @@ void maintainNTRIP() {
                           "Authorization: Basic " + authStr + "\r\n" +
                           "Accept: rtk/rtcm, */*\r\n" +
                           "Connection: close\r\n\r\n");
-        Serial.println("[NTRIP] HTTP so'rov yuborildi! Javob kutilmoqda...");
-      } else {
-        Serial.println("[NTRIP XATO] Serverga ulanib bo'lmadi!");
       }
     }
     return;
   }
 
-  // 2. HTTP sarlavhalarini o'tkazib yuborish (Headerlarni LG290P ga bermaymiz!)
   if (!isNtripHeaderSkipped) {
     while (ntripClient.available()) {
       String line = ntripClient.readStringUntil('\n');
       line.trim();
-      if (line.startsWith("ICY 200") || line.startsWith("HTTP/1.0 200") || line.startsWith("HTTP/1.1 200")) {
-        Serial.println("[NTRIP] Server qabul qildi: 200 OK!");
-      }
-      if (line.length() == 0) { // Bo'sh satr kelishi sarlavhalar tugaganini bildiradi
+      if (line.length() == 0) {
         isNtripHeaderSkipped = true;
-        Serial.println("[NTRIP] RTCM binar oqimi boshlandi!");
         break;
       }
     }
     return;
   }
 
-  // 3. RTCM tuzatish paketlarini LG290P moduliga uzatish
   size_t avail = ntripClient.available();
   if (avail > 0) {
     uint8_t buffer[256];
@@ -140,30 +140,31 @@ void maintainNTRIP() {
     totalRtcmBytes += bytesRead;
   }
 
-  // 4. NTRIP Serverga rover koordinatasini yuborish (NMEA Feedback)
-  // Bazasiz bu ishlamaydi — baza stansiyasi siz qayerdaligingizni bilishi shart!
   if (millis() - lastNtripGgaTime >= NTRIP_GGA_MS) {
     lastNtripGgaTime = millis();
     if (lastGgaSentence.length() > 0) {
       ntripClient.print(lastGgaSentence + "\r\n");
-      Serial.println("[NTRIP -> Baza] O'z koordinatamiz (GGA) bazaga yuborildi");
     }
   }
 }
 
 // ============================================================================
-// SERVERGA TELEMETRIYA YUBORISH (Render.com)
+// SERVERGA TELEMETRIYA YUBORISH (Keep-Alive optimizatsiyasi bilan)
 // ============================================================================
 void sendToServer(double lat, double lng, int sat, int fix, float hdop, float alt, float speed) {
   if (WiFi.status() != WL_CONNECTED) return;
 
-  WiFiClientSecure client;
-  client.setInsecure(); // Render HTTPS sertifikatini qabul qilish
+  if (!isHttpInitialized) {
+    client.setInsecure();
+    http.setReuse(true); // Qayta-qayta TLS handshake qilmaydi — 10 barobar tez!
+    isHttpInitialized = true;
+  }
 
-  HTTPClient http;
-  http.begin(client, serverApiUrl);
-  http.addHeader("Content-Type", "application/json");
-  http.setTimeout(4000);
+  if (!http.connected()) {
+    http.begin(client, serverApiUrl);
+    http.addHeader("Content-Type", "application/json");
+    http.setTimeout(2500);
+  }
 
   String payload = "{";
   payload += "\"lat\":\"" + String(lat, 8) + "\",";
@@ -179,37 +180,45 @@ void sendToServer(double lat, double lng, int sat, int fix, float hdop, float al
   int httpCode = http.POST(payload);
 
   if (httpCode == HTTP_CODE_OK || httpCode == 201) {
-    Serial.printf("[HTTP OK] Lat: %.8f, Lng: %.8f | Sat: %d | Status: %s | RTCM: %lu bayt | HDOP: %.2f\n",
-                  lat, lng, sat, getFixTypeStr(fix), totalRtcmBytes, hdop);
-    digitalWrite(LED_PIN, !digitalRead(LED_PIN)); // Holat LED miltillashi
+    Serial.printf("[1s HTTP OK] Lat: %.8f, Lng: %.8f | Sat: %d | HDOP: %.2f | Speed: %.1f km/h\n",
+                  lat, lng, sat, hdop, speed);
+    digitalWrite(LED_PIN, !digitalRead(LED_PIN));
   } else {
-    Serial.printf("[HTTP Xato: %d] %s\n", httpCode, http.errorToString(httpCode).c_str());
+    Serial.printf("[HTTP Xato: %d] Qayta ulanmoqda...\n", httpCode);
+    http.end(); // Xatolik bo'lsa qayta boshlash
   }
-
-  http.end();
 }
 
+// ============================================================================
+// SETUP
+// ============================================================================
 void setup() {
   pinMode(LED_PIN, OUTPUT);
   digitalWrite(LED_PIN, LOW);
 
   Serial.begin(115200);
-  delay(500);
+  delay(300);
   Serial.println("\n==============================================");
-  Serial.println("  RTK GPS Tracker Pro — ESP32 + LG290P        ");
-  Serial.println("  Yuqori Aniqlikdagi Santimetr Tizimi        ");
+  Serial.println("  RTK GPS Tracker Pro — ESP32 + LG290P (SuperFast)");
   Serial.println("==============================================");
 
-  // LG290P GNSS UART
+  // 1. UART RX buferini 2048 baytga oshirish (NMEA paketlari yo'qolmasligi uchun)
+  LG290P.setRxBufferSize(2048);
   LG290P.begin(460800, SERIAL_8N1, RX2_PIN, TX2_PIN);
-  Serial.println("[UART] LG290P ulandi (460800 baud).");
+  Serial.println("[UART] LG290P RX buferi 2048 baytga oshirildi (460800 baud).");
 
-  // WiFi ulanish
+  // 2. Quectel LG290P ni barcha yo'ldosh tizimlariga sozlash
+  delay(150);
+  LG290P.println("$PQTMCFGCNST,1,1,1,1,1,1*00"); // GPS, GLO, GAL, BDS, QZSS, NavIC
+  delay(100);
+  LG290P.println("$PQTMCFGFIXRATE,1000*00");      // 1000 ms = 1 Hz ravon yangilanish
+
+  // 3. WiFi ulanish
   Serial.printf("[WiFi] Ulanmoqda: %s ", ssid);
   WiFi.begin(ssid, password);
   unsigned long wifiStart = millis();
   while (WiFi.status() != WL_CONNECTED && millis() - wifiStart < 15000) {
-    delay(400);
+    delay(300);
     digitalWrite(LED_PIN, !digitalRead(LED_PIN));
     Serial.print(".");
   }
@@ -223,46 +232,60 @@ void setup() {
   }
 }
 
+// ============================================================================
+// LOOP — MUTLAQO BLOKIROVKASIZ VA UZLUKSIZ O'QISH
+// ============================================================================
 void loop() {
-  // 1. NTRIP aloqasini ushlab turish va RTCM qabul qilish
-  maintainNTRIP();
+  // 1. NTRIP faqat yoqilgan bo'lsa ishlaydi
+  if (ENABLE_NTRIP) {
+    maintainNTRIP();
+  }
 
-  // 2. GNSS modulidan baytlarni o'qish va GGA ni ajratish
+  // 2. GNSS modulidan uzluksiz, birorta baytni boy bermasdan o'qish
   while (LG290P.available()) {
     char c = LG290P.read();
     gps.encode(c);
 
-    // Baza stansiyasiga yuborish uchun $GNGGA satrini ushlab olish
-    if (c == '$') {
-      rawNmeaBuffer = "$";
-    } else if (rawNmeaBuffer.length() > 0) {
-      rawNmeaBuffer += c;
-      if (c == '\n') {
-        if (rawNmeaBuffer.startsWith("$GNGGA") || rawNmeaBuffer.startsWith("$GPGGA")) {
-          lastGgaSentence = rawNmeaBuffer;
-          lastGgaSentence.trim();
+    // Yangi koordinata kelishi bilan keshga saqlash
+    if (gps.location.isUpdated()) {
+      latestLat   = gps.location.lat();
+      latestLng   = gps.location.lng();
+      hasFreshGps = true;
+
+      if (gps.satellites.isValid()) latestSat = (int)gps.satellites.value();
+      if (fixQuality.isValid())     latestFix = atoi(fixQuality.value());
+      if (hdopCustom.isValid())     latestHdop = atof(hdopCustom.value());
+      else if (gps.hdop.isValid())  latestHdop = gps.hdop.hdop();
+      if (altCustom.isValid())      latestAlt = atof(altCustom.value());
+      else if (gps.altitude.isValid()) latestAlt = gps.altitude.meters();
+      if (gps.speed.isValid())      latestSpeed = gps.speed.kmph();
+    }
+
+    // NTRIP uchun GGA satrini yig'ish (agar NTRIP yoqilgan bo'lsa)
+    if (ENABLE_NTRIP) {
+      if (c == '$') {
+        rawNmeaBuffer = "$";
+      } else if (rawNmeaBuffer.length() > 0) {
+        rawNmeaBuffer += c;
+        if (c == '\n') {
+          if (rawNmeaBuffer.startsWith("$GNGGA") || rawNmeaBuffer.startsWith("$GPGGA")) {
+            lastGgaSentence = rawNmeaBuffer;
+            lastGgaSentence.trim();
+          }
+          rawNmeaBuffer = "";
         }
-        rawNmeaBuffer = "";
       }
     }
   }
 
-  // 3. Serverga har SEND_INTERVAL_MS oralig'ida yuborish
+  // 3. Serverga HAR 1 SONIYADA ravon va kechikishsiz yuborish
   if (millis() - lastSendTime >= SEND_INTERVAL_MS) {
     lastSendTime = millis();
 
-    if (gps.location.isValid() && gps.location.isUpdated()) {
-      double currentLat = gps.location.lat();
-      double currentLng = gps.location.lng();
-      int satellites    = gps.satellites.isValid() ? (int)gps.satellites.value() : 0;
-      int rtkFix        = fixQuality.isValid() ? atoi(fixQuality.value()) : 0;
-      float hdop        = hdopCustom.isValid() ? atof(hdopCustom.value()) : (gps.hdop.isValid() ? gps.hdop.hdop() : 99.9);
-      float altitude    = altCustom.isValid() ? atof(altCustom.value()) : (gps.altitude.isValid() ? gps.altitude.meters() : 0.0);
-      float speedKmh    = gps.speed.isValid() ? gps.speed.kmph() : 0.0;
-
-      sendToServer(currentLat, currentLng, satellites, rtkFix, hdop, altitude, speedKmh);
-
-    } else if (!gps.location.isValid()) {
+    if (latestLat != 0.0 && latestLng != 0.0) {
+      sendToServer(latestLat, latestLng, latestSat, latestFix, latestHdop, latestAlt, latestSpeed);
+      hasFreshGps = false;
+    } else {
       Serial.println("[GPS] Sun'iy yo'ldoshlar signali kutilmoqda...");
     }
   }

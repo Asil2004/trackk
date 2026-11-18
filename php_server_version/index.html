@@ -372,6 +372,10 @@
             <input type="text" id="cfgApiUrl" class="form-input" placeholder="api.php yoki https://saytingiz.uz/api.php">
         </div>
         
+        <div class="form-group" style="margin-top:10px;">
+            <button class="btn-focus" id="btnSetCurrentAsDefault" style="width:100%; padding:9px; font-size:11px;">📍 Hozirgi joyimni doimiy saqlash</button>
+        </div>
+        
         <div class="robot-links">
             <b>🤖 Robot uchun Endpointlar:</b>
             <div style="margin-top:4px; font-size:10px; color:var(--text-dim);">JSON format (Python/ROS):</div>
@@ -393,10 +397,15 @@
 
     const STORAGE_KEY_API_URL = "rtk_php_api_url";
     const DEFAULT_API_URL = "api.php";
-    const DEFAULT_CENTER = [39.65, 66.95];
-    const DEFAULT_ZOOM = 16;
+    const STORAGE_KEY_DEFAULT_CENTER = "rtk_default_center";
+    const savedCenter = localStorage.getItem(STORAGE_KEY_DEFAULT_CENTER);
+    const DEFAULT_CENTER = savedCenter ? JSON.parse(savedCenter) : [39.65, 66.95];
+    const DEFAULT_ZOOM = 17;
     const POLL_INTERVAL = 1200; // Har 1.2 soniyada serverdan so'rash
     const MIN_DISTANCE_THRESHOLD = 0.5;
+
+    let userCurrentLocation = null;
+    let userLocationMarker = null;
 
     let apiUrl = localStorage.getItem(STORAGE_KEY_API_URL) || DEFAULT_API_URL;
     let isTracking = false, lastPos = null, prevPos = null, prevTime = null;
@@ -957,12 +966,53 @@
         }
     };
 
+    // =================== FOYDALANUVCHI JOYLASHUVI (GEOLOCATION) ===================
+    function autoLocateUser(fly = false) {
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(pos => {
+                const uLat = pos.coords.latitude;
+                const uLng = pos.coords.longitude;
+                userCurrentLocation = [uLat, uLng];
+
+                // Doimiy saqlab qo'yish
+                localStorage.setItem(STORAGE_KEY_DEFAULT_CENTER, JSON.stringify(userCurrentLocation));
+
+                if (fly || !lastPos) {
+                    map.flyTo(userCurrentLocation, 18, { duration: 0.8 });
+                    showToast("📍 Hozirgi joyingiz doimiy belgilandi");
+                }
+
+                if (!userLocationMarker) {
+                    const userIcon = L.divIcon({
+                        className: '',
+                        html: `<div style="width:18px;height:18px;border-radius:50%;background:#3b82f6;border:2px solid white;box-shadow:0 0 12px #3b82f6;display:flex;align-items:center;justify-content:center;font-size:10px;">👤</div>`,
+                        iconSize: [18,18], iconAnchor: [9,9]
+                    });
+                    userLocationMarker = L.marker(userCurrentLocation, { icon: userIcon }).addTo(map)
+                        .bindTooltip("👤 Siz shu yerdasiz", { permanent: false, direction: 'top' });
+                } else {
+                    userLocationMarker.setLatLng(userCurrentLocation);
+                }
+            }, err => {
+                if (fly) showToast("Joylashuvni aniqlashga ruxsat berilmadi");
+            }, { enableHighAccuracy: true, timeout: 8000 });
+        }
+    }
+
     // =================== EVENT LISTENERS ===================
     document.getElementById('btnStart').onclick = startTracking;
     document.getElementById('btnStop').onclick = stopTracking;
     document.getElementById('btnFindMe').onclick = () => {
-        if (lastPos) map.flyTo(lastPos, 19, { duration: 0.8 });
-        else showToast("GPS ma'lumoti hali kelmadi");
+        if (lastPos) {
+            map.flyTo(lastPos, 19, { duration: 0.8 });
+            showToast("📍 RTK GPS joylashuviga fokus qilindi");
+        } else {
+            autoLocateUser(true);
+        }
+    };
+    document.getElementById('btnSetCurrentAsDefault').onclick = () => {
+        autoLocateUser(true);
+        settingsModal.classList.remove('active');
     };
     document.getElementById('btnSetTarget').onclick = toggleTargetMode;
     document.getElementById('btnHistory').onclick = loadHistory;
@@ -1005,6 +1055,7 @@
     settingsModal.onclick = e => { if (e.target === e.currentTarget) e.target.classList.remove('active'); };
 
     // Boshlash
+    autoLocateUser(false);
     fetchCurrentPos();
     pollTimer = setInterval(fetchCurrentPos, POLL_INTERVAL);
     updateTrackStats();

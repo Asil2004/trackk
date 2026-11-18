@@ -1,0 +1,15 @@
+{
+  "name": "rtk-gps-tracker-server",
+  "version": "1.0.0",
+  "description": "RTK GPS Tracker & Qalqon Robot Navigation Server",
+  "main": "php_server_version/server.js",
+  "scripts": {
+    "start": "node php_server_version/server.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": ["rtk", "gps", "tracker", "esp32", "robot"],
+  "author": "Asil2004",
+  "license": "MIT"
+}

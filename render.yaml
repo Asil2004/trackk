@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: rtk-gps-tracker
+    env: node
+    plan: free
+    buildCommand: ""
+    startCommand: node php_server_version/server.js
+    envVars:
+      - key: NODE_VERSION
+        value: 20

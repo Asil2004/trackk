@@ -1,4 +1,5 @@
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <TinyGPSPlus.h>
 
@@ -108,10 +109,13 @@ void maintainNTRIP() {
 void sendToServer(double lat, double lng, int sat, int fix, float hdop, float alt, float speed) {
   if (WiFi.status() != WL_CONNECTED) return;
 
+  WiFiClientSecure client;
+  client.setInsecure(); // Render HTTPS sertifikatini qabul qilish
+
   HTTPClient http;
-  http.begin(serverApiUrl);
+  http.begin(client, serverApiUrl);
   http.addHeader("Content-Type", "application/json");
-  http.setTimeout(3000); // 3 soniya timeout
+  http.setTimeout(4000); // 4 soniya timeout
 
   // JSON formatdagi ma'lumot
   String payload = "{";

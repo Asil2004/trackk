@@ -1,4 +1,5 @@
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 
 // ============================================================================
@@ -28,9 +29,12 @@ void setup() {
 
 void loop() {
   if (WiFi.status() == WL_CONNECTED) {
+    WiFiClientSecure client;
+    client.setInsecure();
+
     HTTPClient http;
-    http.begin(serverUrl);
-    http.setTimeout(2500);
+    http.begin(client, serverUrl);
+    http.setTimeout(3000);
 
     int httpCode = http.GET();
     if (httpCode == HTTP_CODE_OK) {

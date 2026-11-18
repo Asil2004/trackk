@@ -11,7 +11,7 @@ const char* ssid     = "WiFi_Nomi";
 const char* password = "WiFi_Paroli";
 
 // Serverdagi api.php manzili (IP yoki domen)
-const char* serverUrl = "http://sizningsaytingiz.uz/gps/api.php?action=robot_raw";
+const char* serverUrl = "https://trackk-gl6l.onrender.com/api.php?action=robot_raw";
 
 void setup() {
   Serial.begin(115200);

@@ -13,7 +13,7 @@ import math
 # SOZLAMALAR: O'zingizning serveringiz IP manzili yoki domenini yozing
 # Masalan: "http://192.168.1.100/gps/api.php" yoki "https://saytingiz.uz/gps/api.php"
 # ==============================================================================
-SERVER_API_URL = "http://sizningsaytingiz.uz/gps/api.php"
+SERVER_API_URL = "https://trackk-gl6l.onrender.com/api.php"
 POLL_INTERVAL_SEC = 1.0  # Har 1 soniyada koordinatani yangilash
 
 

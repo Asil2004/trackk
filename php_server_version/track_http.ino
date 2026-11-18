@@ -12,7 +12,7 @@ const char* password = "11111111";
 // 2. O'ZINGIZNING SAYTINGIZ / SERVERINGIZ MANZILI
 // api.php joylashgan to'liq URL manzilini kiriting
 // ============================================================================
-const char* serverApiUrl = "http://sizningsaytingiz.uz/gps/api.php";
+const char* serverApiUrl = "https://trackk-gl6l.onrender.com/api.php";
 
 // ============================================================================
 // 3. NTRIP SOZLAMALARI (RTK Tuzatishlar uchun)

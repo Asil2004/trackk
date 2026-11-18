@@ -6,8 +6,8 @@
 // ============================================================================
 // 1. WiFi SOZLAMALARI
 // ============================================================================
-const char* ssid     = "Redmi Note 14";
-const char* password = "Sizning_WiFi_Parolingiz";
+const char* ssid     = "cail";
+const char* password = "12345678";
 
 // ============================================================================
 // 2. SERVER MANZILI (Render.com)
